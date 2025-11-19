@@ -1,0 +1,32 @@
+[project]
+name = "lpr-fastapi"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "uvicorn>=0.38.0",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+    "ultralytics>=8.3.225",
+    "fastapi>=0.121.0",
+    "pydantic-settings>=2.11.0",
+    "pydantic>=2.12.4",
+    "opencv-python>=4.11.0.86",
+    "pymongo>=4.15.4",
+]
+
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+torchvision = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
