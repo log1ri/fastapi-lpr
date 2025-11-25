@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.services.ocr_service import OCRService
-from app.schemas.ocr import imgBody
+from app.schemas.ocr import ImgBody
 
 router = APIRouter(
     prefix="/ocr-service",
@@ -13,18 +13,18 @@ async def get_ocr_service():
 
 
 # @router.post("/predict",status_code=201)
-# async def predict(payload: imgBody):
+# async def predict(payload: ImgBody):
 #     OCRService()
 #     return {"imgBase64": imgBase64}
 
 @router.post("/predict",status_code=201)
-async def predict(payload: imgBody, ocr_service: OCRService = Depends(get_ocr_service)):
+async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     # OCRService()
     result = ocr_service.predict(payload.imgBase64)
     return {"response": result}  
 
 @router.post("/base64-to-img",status_code=201)
-async def decoded(payload: imgBody, ocr_service: OCRService = Depends(get_ocr_service)):
+async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     # OCRService()
     result = ocr_service.decode_base64(payload.imgBase64)
     return {"response": result}  
