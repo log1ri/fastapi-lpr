@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
+    ALLOWED_ORIGINS: list[str] = ["*"]
+    
     API_VERSION: str = "/api/v1"
     APP_NAME: str = "LPR FastAPI"
     APP_ENV: str = "development"

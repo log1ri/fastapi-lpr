@@ -27,4 +27,4 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
 async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     # OCRService()
     result = ocr_service.decode_base64(payload.imgBase64)
-    return {"response": result}  
+    return {"response": len(result)}  

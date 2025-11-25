@@ -1,7 +1,8 @@
 from fastapi import FastAPI, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings  
-from app.db.database import  init_db, client
+from app.db.database import  init_db
 from app.routers import ocr
 from app.routers import test
 
@@ -28,6 +29,14 @@ app = FastAPI(
     version="1.0.0",
     description="Basic FastAPI setup with core config",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # create main API router
