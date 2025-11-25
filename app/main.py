@@ -1,12 +1,32 @@
 from fastapi import FastAPI, APIRouter
-from app.core.config import settings  # ดึง config ที่เราสร้าง
+from contextlib import asynccontextmanager
+from app.core.config import settings  
+from app.db.database import  get_client 
 from app.routers import ocr
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ⭐ Startup
+    client = get_client()
+    print("\n" + "=" * 60)
+    print("✅  MongoDB Connected")
+    print(f"📂  DB    : {settings.MONGO_DB_NAME}")
+    print("=" * 60 + "\n")
+
+    yield  # <– cut line between startup and shutdown
+
+    # ⭐ Shutdown
+    client.close()
+    print("\n" + "=" * 60)
+    print("🛑  MongoDB Disconnected")
+    print("=" * 60 + "\n")
 
 # setup FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
     description="Basic FastAPI setup with core config",
+    lifespan=lifespan
 )
 
 # create main API router
@@ -17,8 +37,24 @@ app.include_router(api_router, prefix=settings.API_VERSION)
 app.include_router(ocr.router, prefix=settings.API_VERSION)
 
 
+# @app.on_event("startup")
+# async def startup_db_client():
+#     get_client()
+#     print("\n" + "=" * 60)
+#     print("✅  MongoDB Connected")
+#     print(f"📂  DB    : {settings.MONGO_DB_NAME}")
+#     print("=" * 60 + "\n")
+
+# @app.on_event("shutdown")
+# async def shutdown_db_client():
+#     client = get_client()
+#     client.close()
+#     print("\n" + "=" * 60)
+#     print("🛑  MongoDB Disconnected")
+#     print("=" * 60 + "\n")
+
 # Health check endpoint
-@app.get("/",status_code=201, tags=["health"])
+@app.get("/health",status_code=200, tags=["health"])
 async def health_check():
     return {
         "status": "ok",
@@ -27,7 +63,7 @@ async def health_check():
 }
     
 
-@api_router.get("/test")
+@api_router.get("/")
 async def test():
     return {"message": "Hello World"}
 
