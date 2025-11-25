@@ -1,19 +1,19 @@
 from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 from app.core.config import settings 
+from app.models.sample import Sample
+
 
 # create a MongoDB client using settings to avoid unused-import lint errors
 client: AsyncIOMotorClient | None = None
 db = None
 
-
-def get_client() -> AsyncIOMotorClient:
+async def init_db():
     global client
-    if client is None:
-        client = AsyncIOMotorClient(settings.MONGO_URL)
-    return client
-
-def get_database():
-    global db
-    if db is None:
-        db = get_client()[settings.MONGO_DB_NAME]
-    return db
+    client = AsyncIOMotorClient(settings.MONGO_URL)
+    await init_beanie(
+        database=client[settings.MONGO_DB_NAME],
+        document_models=[
+            Sample
+        ],  
+    )

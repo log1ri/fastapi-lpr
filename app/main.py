@@ -1,13 +1,14 @@
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
 from app.core.config import settings  
-from app.db.database import  get_client 
+from app.db.database import  init_db, client
 from app.routers import ocr
+from app.routers import test
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ⭐ Startup
-    client = get_client()
+    await init_db()
     print("\n" + "=" * 60)
     print("✅  MongoDB Connected")
     print(f"📂  DB    : {settings.MONGO_DB_NAME}")
@@ -16,10 +17,10 @@ async def lifespan(app: FastAPI):
     yield  # <– cut line between startup and shutdown
 
     # ⭐ Shutdown
-    client.close()
-    print("\n" + "=" * 60)
-    print("🛑  MongoDB Disconnected")
-    print("=" * 60 + "\n")
+    # client.close()
+    # print("\n" + "=" * 60)
+    # print("🛑  MongoDB Disconnected")
+    # print("=" * 60 + "\n")
 
 # setup FastAPI app
 app = FastAPI(
@@ -35,23 +36,17 @@ api_router = APIRouter()
 app.include_router(api_router, prefix=settings.API_VERSION) 
 # include OCR service router with API version prefix
 app.include_router(ocr.router, prefix=settings.API_VERSION)
+app.include_router(test.router, prefix=settings.API_VERSION)
 
 
-# @app.on_event("startup")
-# async def startup_db_client():
-#     get_client()
-#     print("\n" + "=" * 60)
-#     print("✅  MongoDB Connected")
-#     print(f"📂  DB    : {settings.MONGO_DB_NAME}")
-#     print("=" * 60 + "\n")
+@app.on_event("startup")
+async def startup_db_client():
+    pass
 
-# @app.on_event("shutdown")
-# async def shutdown_db_client():
-#     client = get_client()
-#     client.close()
-#     print("\n" + "=" * 60)
-#     print("🛑  MongoDB Disconnected")
-#     print("=" * 60 + "\n")
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    pass
 
 # Health check endpoint
 @app.get("/health",status_code=200, tags=["health"])
@@ -65,5 +60,5 @@ async def health_check():
 
 @api_router.get("/")
 async def test():
-    return {"message": "Hello World"}
+    return {"message": "Who are you?"}
 

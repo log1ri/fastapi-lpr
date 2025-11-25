@@ -15,21 +15,22 @@ dependencies = [
     "opencv-python>=4.11.0.86",
     "pymongo>=4.15.4",
     "motor>=3.7.1",
+    "beanie>=2.0.1",
 ]
 
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu-126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 torchvision = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu-126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
+name = "pytorch-cu-126"
+url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
 [tool.uv]
