@@ -6,10 +6,13 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# environments
 .venv
-
 .env
 
+# model
 model/yolo/best.pt
+
 app/img/
+
+uv.lock
