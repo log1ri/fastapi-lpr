@@ -4,7 +4,7 @@ import numpy as np
 import io
 import cv2
 from ultralytics import YOLO
-from app.services.labelMapping import label_dict, province_map
+from app.services.ocr_labelMapping import label_dict, province_map
 from operator import itemgetter
 
 
