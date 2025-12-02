@@ -26,7 +26,7 @@ class OCRService:
         return cv2.resize(image, target_size)
 
     # 1
-    def decode_base64(self, img_base64: str) -> bytes:
+    def decode_base64(self, img_base64: str) -> bytes | None:
         try:
             
             # cut prefix (data:image/jpeg;base64,)
@@ -43,7 +43,7 @@ class OCRService:
             return None
     
     # 2
-    def preProcess(self, img_bytes: bytes) -> np.ndarray:
+    def preProcess(self, img_bytes: bytes) -> np.ndarray | None:
         """
         Change raw image bytes to numpy array (BGR) for OpenCV/YOLO usage.
         """
@@ -71,7 +71,9 @@ class OCRService:
         
         x1, y1, x2, y2 = map(int, plate_boxes.xyxy[0])
         cropped_plate = resized_decoded[y1:y2, x1:x2]
+        
         cv2.imwrite("debug_cropped_plate.jpg", cropped_plate)
+        
         resized_cropped_plate = self.resize_image(cropped_plate, target_size=(640, 640))
         return resized_cropped_plate
     
@@ -93,11 +95,15 @@ class OCRService:
         # get class ids and x/y centers
         cls_list = boxes.cls.cpu().numpy()
         xywh = boxes.xywh.cpu().numpy()
+        confs = boxes.conf.cpu().numpy()
+        
         x_centers = xywh[:, 0]
         y_centers = xywh[:, 1]
         heights = xywh[:, 3]
 
         print("Classes:", cls_list)
+        print("Conf  :", confs)
+
         print("X Centers:", x_centers)
         print("Y Centers:", y_centers)
         print("Heights:", heights)
@@ -110,6 +116,7 @@ class OCRService:
                 "x": float(x_centers[i]),
                 "y": float(y_centers[i]),
                 "h": float(heights[i]),
+                "conf": float(confs[i]),
             })
         return detections
 
@@ -159,18 +166,26 @@ class OCRService:
         decoded = ""
         province = ""
 
-        final_list = [(d["name"], d["x"]) for d in sorted_detections]
-
-        for name, _ in final_list:
+        final_list = [(d["name"], d["x"], d["conf"]) for d in sorted_detections]
+        confs_for_text: list[float] = [] 
+        
+        for name, _, conf in final_list:
             if name in province_map:
                 province = label_dict.get(name, f"[{name}]")
             else:
                 decoded += label_dict.get(name, f"[{name}]")
+                confs_for_text.append(conf)
 
+        if confs_for_text:
+            avg_conf = sum(confs_for_text) / len(confs_for_text)
+        else:
+            avg_conf = 0.0
+        
         print("Decoded Text:", decoded)
         print("Province:", province)
+        print("Avg Confidence:", avg_conf)
 
-        return {"regNum": decoded, "Province": province}
+        return {"regNum": decoded, "Province": province, "confidence": avg_conf}
     
     def predict(self, img_base64: str) -> dict:
         try:
