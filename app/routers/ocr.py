@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.services.ocr_service import OCRService
 from app.schemas.ocr import ImgBody
+from fastapi.concurrency import run_in_threadpool
+
 
 router = APIRouter(
     prefix="/ocr-service",
@@ -8,8 +10,9 @@ router = APIRouter(
     responses={404: {"description": "Not foundd"}},
 )
 
-async def get_ocr_service():
-    return OCRService()
+ocr_service_instance = OCRService()
+def get_ocr_service():
+    return ocr_service_instance
 
 
 # @router.post("/predict",status_code=201)
@@ -20,7 +23,7 @@ async def get_ocr_service():
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     # OCRService()
-    result = ocr_service.predict(payload.imgBase64)
+    result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
     return {"response": result}  
 
 @router.post("/base64-to-img",status_code=201)

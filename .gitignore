@@ -11,8 +11,10 @@ wheels/
 .env
 
 # model
-model/yolo/best.pt
+model/yolo/*
 
 app/img/
+debug_cropped_plate.jpg
+debug_preprocessed.jpg
 
 uv.lock

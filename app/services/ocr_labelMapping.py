@@ -1,6 +1,5 @@
 # 0-9
 label_dict = {str(i): str(i) for i in range(10)}  
-# print("0-9:", label_dict)
     
 # A01-A44 → ก - ฮ
 exclude_chars = ['ฤ', 'ฦ']
