@@ -12,10 +12,10 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     # ⭐ Startup
     await init_db()
-    print("\n" + "=" * 60)
-    print("✅  MongoDB Connected")
-    print(f"📂  DB    : {settings.MONGO_DB_NAME}")
-    print("=" * 60 + "\n")
+    # print("\n" + "=" * 60)
+    # print("✅  MongoDB Connected")
+    # print(f"📂  DB    : {settings.MONGO_DB_NAME}")
+    # print("=" * 60 + "\n")
 
     yield  # <– cut line between startup and shutdown
 

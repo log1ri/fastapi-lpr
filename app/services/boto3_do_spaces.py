@@ -1,5 +1,6 @@
 import os
 import boto3
+from functools import lru_cache
 from app.core.config import get_settings
 
 settings = get_settings()

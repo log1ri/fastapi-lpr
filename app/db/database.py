@@ -18,3 +18,8 @@ async def init_db():
             Sample
         ],  
     )
+    
+print("\n" + "=" * 60)
+print("✅  MongoDB / Beanie Initialized")
+print(f"📂  DB  : {settings.MONGO_DB_NAME}")
+print("=" * 60 + "\n")
