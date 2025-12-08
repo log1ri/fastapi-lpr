@@ -18,21 +18,22 @@ dependencies = [
     "beanie>=2.0.1",
     "boto3>=1.41.3",
     "python-multipart>=0.0.20",
+    "aioboto3>=7.0.0",
 ]
 
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu-126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 torchvision = [
-  { index = "pytorch-cu-126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu-126"
-url = "https://download.pytorch.org/whl/cu126"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv]

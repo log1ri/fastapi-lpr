@@ -24,6 +24,12 @@ class OCRService:
 
     def resize_image(self, image: np.ndarray, target_size=(640, 640)) -> np.ndarray:
         return cv2.resize(image, target_size)
+    
+    def img_to_jpeg_bytes(self, img: np.ndarray) -> bytes:
+        ok, buf = cv2.imencode(".jpg", img)
+        if not ok:
+            return b""
+        return buf.tobytes()
 
     # 1
     def decode_base64(self, img_base64: str) -> bytes | None:
@@ -43,7 +49,7 @@ class OCRService:
             return None
     
     # 2
-    def preProcess(self, img_bytes: bytes) -> np.ndarray | None:
+    def preProcess(self, img_bytes: bytes) -> tuple[np.ndarray, np.ndarray] | None:
         """
         Change raw image bytes to numpy array (BGR) for OpenCV/YOLO usage.
         """
@@ -52,7 +58,8 @@ class OCRService:
         if frame is None:
             return None
         
-        return self.resize_image(frame, target_size=(640, 640))
+        resized = self.resize_image(frame, target_size=(640, 640))
+        return frame, resized
     
     # 3
     def detect_plate(self, img: np.ndarray):
@@ -67,7 +74,7 @@ class OCRService:
             return None
         return boxes
     
-    def crop_plate(self, resized_decoded: np.ndarray, plate_boxes) -> np.ndarray:
+    def crop_plate(self, resized_decoded: np.ndarray, plate_boxes) -> tuple[np.ndarray, np.ndarray] | None:
         
         x1, y1, x2, y2 = map(int, plate_boxes.xyxy[0])
         cropped_plate = resized_decoded[y1:y2, x1:x2]
@@ -75,7 +82,7 @@ class OCRService:
         cv2.imwrite("debug_cropped_plate.jpg", cropped_plate)
         
         resized_cropped_plate = self.resize_image(cropped_plate, target_size=(640, 640))
-        return resized_cropped_plate
+        return cropped_plate, resized_cropped_plate
     
     def run_ocr_model(self, plate_img: np.ndarray):
         results = self.ocr_model.predict(
@@ -199,7 +206,7 @@ class OCRService:
             
             
             # pre-process image =========================================
-            resized_decoded = self.preProcess(decoded)
+            original_frame, resized_decoded = self.preProcess(decoded)
             
             if resized_decoded is None:
                 return {"error": "Cannot decode image"}
@@ -215,8 +222,10 @@ class OCRService:
                 return {"error": "No plate detected"}
             # ===========================================================
 
+            
+            # ************************************************
             # 3. crop plate image and resize ============================
-            resized_cropped_plate = self.crop_plate(resized_decoded, plate_boxes)
+            cropped_plate, resized_cropped_plate = self.crop_plate(resized_decoded, plate_boxes)
 
             boxes = self.run_ocr_model(resized_cropped_plate)
             if boxes is None:
@@ -230,8 +239,20 @@ class OCRService:
             sorted_detections = self.group_and_sort_detections(detections)
 
             # decode plate text
-            res = self.decode_plate_text(sorted_detections)
-            return res
+            result = self.decode_plate_text(sorted_detections)
+            
+            original_img = self.img_to_jpeg_bytes(original_frame)
+            crop_img = self.img_to_jpeg_bytes(cropped_plate)
+            
+            print("Original img",original_img)
+            print("Cropped img",crop_img)
+            return {
+                "regNum": result["regNum"],
+                "province": result["Province"],
+                "confidence": result["confidence"],
+                # "originalImage": original_img,
+                # "croppedPlateImage": crop_img
+            }
         except Exception as e:
             print(f"Error in OCR prediction: {e}")
             return {"error": f"OCR prediction failed: {e}"}
