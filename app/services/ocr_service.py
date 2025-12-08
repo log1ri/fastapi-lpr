@@ -194,13 +194,22 @@ class OCRService:
 
         return {"regNum": decoded, "Province": province, "confidence": avg_conf}
     
-    def predict(self, img_base64: str) -> dict:
+    def predict(self, img_base64: str,organize: str | None = None) -> dict:
         try:
             # decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
 
             if decoded is None:
-                return {"error": "Invalid base64 image"}
+                # decoding failed
+                return {
+                    "error": "Invalid base64 image",
+                    "regNum": None,
+                    "province": None,
+                    "confidence": 0.0,
+                    "readStatus": None,
+                    "originalImage": None,
+                    "croppedPlateImage": None,
+                }
             
             # ===========================================================
             
@@ -208,8 +217,17 @@ class OCRService:
             # pre-process image =========================================
             original_frame, resized_decoded = self.preProcess(decoded)
             
-            if resized_decoded is None:
-                return {"error": "Cannot decode image"}
+            if resized_decoded is None or original_frame is None:
+                # pre-processing failed
+                return {
+                    "error": "Cannot decode image",
+                    "regNum": None,
+                    "province": None,
+                    "confidence": 0.0,
+                    "readStatus": None,
+                    "originalImage": None,
+                    "croppedPlateImage": None,
+                }
             
             cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
             # ===========================================================
@@ -218,8 +236,18 @@ class OCRService:
             # detect plate ==============================================
             plate_boxes = self.detect_plate(resized_decoded)
             
-            if plate_boxes is None :
-                return {"error": "No plate detected"}
+            if plate_boxes is None:
+                # no plate detected return error with original image --> issuelog
+                return {
+                    "error": "No plate detected",
+                    "regNum": None,
+                    "province": None,
+                    "confidence": 0.0,
+                    "readStatus": "no_plate",   
+                    "originalImage": self.img_to_jpeg_bytes(original_frame),
+                    "croppedPlateImage": None,
+                    "organize": organize,
+                }
             # ===========================================================
 
             
@@ -229,7 +257,17 @@ class OCRService:
 
             boxes = self.run_ocr_model(resized_cropped_plate)
             if boxes is None:
-                return {"error": "No text detected"}
+                # Plate detected but no text found
+                return {
+                    "error": "No text detected",
+                    "regNum": None,
+                    "province": None,
+                    "confidence": 0.0,
+                    "readStatus": "none",  # อ่านไม่ออกเลย
+                    "originalImage": self.img_to_jpeg_bytes(original_frame),
+                    "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
+                    "organize": organize,
+                }
             # ===========================================================
             
             # extract boxes and classes
@@ -241,19 +279,30 @@ class OCRService:
             # decode plate text
             result = self.decode_plate_text(sorted_detections)
             
+            # format output images
             original_img = self.img_to_jpeg_bytes(original_frame)
             crop_img = self.img_to_jpeg_bytes(cropped_plate)
             
-            print("Original img",original_img)
-            print("Cropped img",crop_img)
             return {
+                "error": None,
                 "regNum": result["regNum"],
                 "province": result["Province"],
                 "confidence": result["confidence"],
-                # "originalImage": original_img,
-                # "croppedPlateImage": crop_img
+                "readStatus": 'complete' ,
+                "originalImage": "xxx",
+                "croppedPlateImage": "xxx",
+                "organize": organize,
             }
         except Exception as e:
             print(f"Error in OCR prediction: {e}")
-            return {"error": f"OCR prediction failed: {e}"}
+            return {
+                "error": f"OCR prediction failed: {e}",
+                 "regNum": None,
+                "province": None,
+                "confidence": 0.0,
+                "readStatus": "error",
+                "originalImage": None,
+                "croppedPlateImage": None,
+                "organize": organize,
+            }
         

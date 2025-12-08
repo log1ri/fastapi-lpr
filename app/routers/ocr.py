@@ -17,17 +17,25 @@ ocr_service_instance = OCRService()
 def get_ocr_service():
     return ocr_service_instance
 
+CAMID_TO_ORGANIZE = {
+    "CAM01": "rmutp",
+    "CAM02": "ORG_B",
+    # เพิ่มตามจริง
+}
 
-# @router.post("/predict",status_code=201)
-# async def predict(payload: ImgBody):
-#     OCRService()
-#     return {"imgBase64": imgBase64}
+def camid_to_organize(camid: str | None) -> str | None:
+    if camid is None:
+        return None
+    return CAMID_TO_ORGANIZE.get(camid, camid)  
 
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
-    # OCRService()
-    result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
+    organize = camid_to_organize(payload.camId)
+    result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64, organize)
     return {"response": result}  
+
+
+
 
 @router.post("/base64-to-img",status_code=201)
 async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
