@@ -6,7 +6,7 @@ from app.services.ocr_labelMapping import label_dict, province_map
 from datetime import datetime
 import time
 import logging
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger("ocr_service") 
 class OCRService:
        
 
@@ -64,7 +64,6 @@ class OCRService:
         """
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        print("Decoded image shape:", frame.shape if frame is not None else "None")
         if frame is None:
             return None
         
@@ -214,7 +213,7 @@ class OCRService:
             start_time = time.time()
             # 1 decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
-            print("Base64 decoding done.")
+            logger.info("Base64 decoding done.")
             if decoded is None:
                 print("[OCR] invalid_image: base64 decode failed")
                 # decoding failed ใช้งานได้
@@ -235,7 +234,7 @@ class OCRService:
             
             # pre-process image =========================================
             pre = self.preProcess(decoded)
-            print("Pre-processing done.")
+            logger.info("Pre-processing done.")
             if pre is None:
                 print("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
                 # pre-processing failed (cannot decode(cv) image) ใช้งานได้
@@ -256,7 +255,7 @@ class OCRService:
 
             # detect plate ==============================================
             plate_boxes = self.detect_plate(resized_decoded)
-            
+            logger.info("Plate detection done.")
             if plate_boxes is None:
                 print("[OCR] no_plate: YOLO plate detector found nothing")
                 # no plate detected return error with original image --> issuelog ใช้งานได้
@@ -279,6 +278,8 @@ class OCRService:
             cropped_plate, resized_cropped_plate = self.crop_plate(resized_decoded, plate_boxes)
 
             boxes = self.run_ocr_model(resized_cropped_plate)
+            logger.info("Char detection done.")
+
             if boxes is None:
                 print("[OCR] no_text: OCR model found no characters")
                 # Plate detected but no text found ใช้งานได้
@@ -298,6 +299,8 @@ class OCRService:
             
             # extract boxes and classes
             detections = self.build_detections(boxes)
+            print("Char detection done.")
+
 
             # sort by y center first
             sorted_detections = self.group_and_sort_detections(detections)
