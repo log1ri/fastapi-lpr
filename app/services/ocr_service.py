@@ -3,24 +3,33 @@ import base64
 import numpy as np
 from ultralytics import YOLO
 from app.services.ocr_labelMapping import label_dict, province_map
-
-
-
+from datetime import datetime
+import time
+import logging
+logger = logging.getLogger(__name__) 
 class OCRService:
        
 
     def __init__(self):
         try:
-            print("\n" + "=" * 60)
-            print("✅  OCR Service Initialized")
-            print("🔎  Plate Model   : ./model/yolo/best_license_plate_detect.pt")
-            print("🔤  OCR Model     : ./model/yolo/best_license_plate_recognition.pt")
-            print("=" * 60 + "\n")
-            
+            logger.info("========== ✅ Initializing OCR Service ==========")
+
+            # print("\n" + "=" * 60)
+            # print("✅  OCR Service Initialized")
+            # print("🔎  Plate Model   : ./model/yolo/best_license_plate_detect.pt")
+            # print("🔤  OCR Model     : ./model/yolo/best_license_plate_recognition.pt")
+            # print("=" * 60 + "\n")
+            logger.info("🔎 Loading plate model from: %s", "./model/yolo/best_license_plate_detect.pt")
             self.plate_model = YOLO("./model/yolo/best_license_plate_detect.pt")  
-            self.ocr_model = YOLO("./model/yolo/best_license_plate_recognition.pt")  
+            
+            logger.info("🔤 Loading OCR model from:   %s", "./model/yolo/best_license_plate_recognition.pt")
+            self.ocr_model = YOLO("./model/yolo/best_license_plate_recognition.pt") 
+        
+            logger.info("✅ OCR Service initialized successfully")
+            logger.info("==============================================") 
         except Exception as e:
             print(f"Error initializing OCR Service: {e}")
+            raise OCRServiceError(f"Failed to initialize OCR models: {e}")
 
     def resize_image(self, image: np.ndarray, target_size=(640, 640)) -> np.ndarray:
         return cv2.resize(image, target_size)
@@ -55,6 +64,7 @@ class OCRService:
         """
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        print("Decoded image shape:", frame.shape if frame is not None else "None")
         if frame is None:
             return None
         
@@ -74,6 +84,7 @@ class OCRService:
             return None
         return boxes
     
+    # 4
     def crop_plate(self, resized_decoded: np.ndarray, plate_boxes) -> tuple[np.ndarray, np.ndarray] | None:
         
         x1, y1, x2, y2 = map(int, plate_boxes.xyxy[0])
@@ -84,6 +95,7 @@ class OCRService:
         resized_cropped_plate = self.resize_image(cropped_plate, target_size=(640, 640))
         return cropped_plate, resized_cropped_plate
     
+    # 5
     def run_ocr_model(self, plate_img: np.ndarray):
         results = self.ocr_model.predict(
             plate_img, 
@@ -98,6 +110,7 @@ class OCRService:
             return None
         return boxes
     
+    # 6
     def build_detections(self, boxes) -> list[dict]:
         # get class ids and x/y centers
         cls_list = boxes.cls.cpu().numpy()
@@ -127,6 +140,7 @@ class OCRService:
             })
         return detections
 
+    # 7
     def group_and_sort_detections(self, detections: list[dict]) -> list[dict]:
         # sort by Y center 
         detections.sort(key=lambda k: k["y"])
@@ -169,6 +183,7 @@ class OCRService:
 
         return sorted_detections
     
+    # 8
     def decode_plate_text(self, sorted_detections: list[dict]) -> dict:
         decoded = ""
         province = ""
@@ -196,39 +211,45 @@ class OCRService:
     
     def predict(self, img_base64: str,organize: str | None = None) -> dict:
         try:
-            # decode base64 image =======================================
+            start_time = time.time()
+            # 1 decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
-
+            print("Base64 decoding done.")
             if decoded is None:
-                # decoding failed
+                print("[OCR] invalid_image: base64 decode failed")
+                # decoding failed ใช้งานได้
                 return {
                     "error": "Invalid base64 image",
                     "regNum": None,
                     "province": None,
                     "confidence": 0.0,
-                    "readStatus": None,
+                    "readStatus": "invalid_image",
                     "originalImage": None,
                     "croppedPlateImage": None,
+                    "latencyMs": (time.time() - start_time) * 1000
+
                 }
             
             # ===========================================================
             
             
             # pre-process image =========================================
-            original_frame, resized_decoded = self.preProcess(decoded)
-            
-            if resized_decoded is None or original_frame is None:
-                # pre-processing failed
+            pre = self.preProcess(decoded)
+            print("Pre-processing done.")
+            if pre is None:
+                print("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
+                # pre-processing failed (cannot decode(cv) image) ใช้งานได้
                 return {
-                    "error": "Cannot decode image",
+                    "error": "Cannot decode image(cv)",
                     "regNum": None,
                     "province": None,
                     "confidence": 0.0,
-                    "readStatus": None,
+                    "readStatus": "invalid_image",
                     "originalImage": None,
                     "croppedPlateImage": None,
+                    "latencyMs": (time.time() - start_time) * 1000
                 }
-            
+            original_frame, resized_decoded = pre
             cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
             # ===========================================================
 
@@ -237,16 +258,18 @@ class OCRService:
             plate_boxes = self.detect_plate(resized_decoded)
             
             if plate_boxes is None:
-                # no plate detected return error with original image --> issuelog
+                print("[OCR] no_plate: YOLO plate detector found nothing")
+                # no plate detected return error with original image --> issuelog ใช้งานได้
                 return {
                     "error": "No plate detected",
                     "regNum": None,
                     "province": None,
                     "confidence": 0.0,
                     "readStatus": "no_plate",   
-                    "originalImage": self.img_to_jpeg_bytes(original_frame),
+                    # "originalImage": self.img_to_jpeg_bytes(original_frame),
+                    "originalImage": "xxx",
                     "croppedPlateImage": None,
-                    "organize": organize,
+                    "latencyMs": (time.time() - start_time) * 1000
                 }
             # ===========================================================
 
@@ -257,16 +280,19 @@ class OCRService:
 
             boxes = self.run_ocr_model(resized_cropped_plate)
             if boxes is None:
-                # Plate detected but no text found
+                print("[OCR] no_text: OCR model found no characters")
+                # Plate detected but no text found ใช้งานได้
                 return {
                     "error": "No text detected",
                     "regNum": None,
                     "province": None,
                     "confidence": 0.0,
-                    "readStatus": "none",  # อ่านไม่ออกเลย
-                    "originalImage": self.img_to_jpeg_bytes(original_frame),
-                    "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
-                    "organize": organize,
+                    "readStatus": "no_text",  # อ่านไม่ออกเลย
+                    # "originalImage": self.img_to_jpeg_bytes(original_frame),
+                    # "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
+                    "originalImage": "xxx",
+                    "croppedPlateImage": "xxx",
+                    "latencyMs": (time.time() - start_time) * 1000
                 }
             # ===========================================================
             
@@ -291,18 +317,18 @@ class OCRService:
                 "readStatus": 'complete' ,
                 "originalImage": "xxx",
                 "croppedPlateImage": "xxx",
-                "organize": organize,
+                "latencyMs": (time.time() - start_time) * 1000
             }
         except Exception as e:
             print(f"Error in OCR prediction: {e}")
             return {
                 "error": f"OCR prediction failed: {e}",
-                 "regNum": None,
+                "regNum": None,
                 "province": None,
                 "confidence": 0.0,
                 "readStatus": "error",
                 "originalImage": None,
                 "croppedPlateImage": None,
-                "organize": organize,
+                "latencyMs": (time.time() - start_time) * 1000
             }
         
