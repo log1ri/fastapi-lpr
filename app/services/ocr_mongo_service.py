@@ -1,4 +1,4 @@
-from app.models.user_org import User
+from app.models.user_org import User, UserPublic
 from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
 from app.models.cameras import cameras
 from typing import Optional, Dict, Any
@@ -16,8 +16,7 @@ class OcrMongoService:
     async def get_UID_by_organize(self, organize: Optional[str]):
 
         print("Organization to lookup:", organize)
-        user = await User.find_one(User.organization == organize)
-        print("Found user:", user)
+        user = await User.find_one(User.organization == organize).project(UserPublic)
         if not user:
             return None
         return str(user.id)
@@ -60,7 +59,12 @@ class OcrMongoService:
                 ),
                 )
                 await log.insert()
-                return {"success": True}
+                return {
+                    "success": True,
+                    "logId": str(log.id),
+                    "subId": uId,
+                    "organization": organization,
+                }
 
             except Exception as e:
                 print("Mongo insert error:", e)
