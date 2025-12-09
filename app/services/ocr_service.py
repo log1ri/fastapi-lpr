@@ -2,6 +2,7 @@ import cv2
 import base64
 import numpy as np
 from ultralytics import YOLO
+from app.routers.ocr import OCRServiceError
 from app.services.ocr_labelMapping import label_dict, province_map
 from datetime import datetime
 import time
