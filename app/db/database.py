@@ -2,6 +2,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from app.core.config import get_settings 
 from app.models.sample import Sample
+from app.models.user_org import User
+from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
+from app.models.cameras import cameras
 
 
 # create a MongoDB client using settings to avoid unused-import lint errors
@@ -15,7 +18,10 @@ async def init_db():
     await init_beanie(
         database=client[settings.MONGO_DB_NAME],
         document_models=[
-            Sample
+            Sample,
+            OCRLog,
+            User,
+            cameras,
         ],  
     )
     
