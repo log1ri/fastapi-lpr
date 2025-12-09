@@ -1,3 +1,9 @@
+import logging
+from app.core.logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
+
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -5,6 +11,8 @@ from app.core.config import get_settings
 from app.db.database import  init_db
 from app.routers import ocr
 from app.routers import test
+
+
 
 settings = get_settings()
 
@@ -48,6 +56,8 @@ app.include_router(api_router, prefix=settings.API_VERSION)
 # include OCR service router with API version prefix
 app.include_router(ocr.router, prefix=settings.API_VERSION)
 app.include_router(test.router, prefix=settings.API_VERSION)
+logger.info("🚀 App starting up...")
+
 
 
 @app.on_event("startup")
