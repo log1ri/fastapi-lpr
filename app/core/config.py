@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     DO_SPACES_ENDPOINT: str
     DO_SPACES_BUCKET: str
     DO_SPACES_CDN_DOMAIN: str | None = None
+    # IMG_LOG_PATH_PREFIX: str
+    ORI_IMG_LOG_PATH_PREFIX: str
+    PRO_IMG_LOG_PATH_PREFIX: str
+
+    ISSUE_LOG_PATH_PREFIX: str
 
     class Config:
         env_file = ".env"

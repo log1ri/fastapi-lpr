@@ -5,7 +5,9 @@ from app.models.sample import Sample
 from app.models.user_org import User
 from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
 from app.models.cameras import cameras
+import logging
 
+logger = logging.getLogger("MongoDB_service") 
 
 # create a MongoDB client using settings to avoid unused-import lint errors
 client: AsyncIOMotorClient | None = None
@@ -25,7 +27,7 @@ async def init_db():
         ],  
     )
     
-print("\n" + "=" * 60)
-print("✅  MongoDB / Beanie Initialized")
-print(f"📂  DB  : {settings.MONGO_DB_NAME}")
-print("=" * 60 + "\n")
+logger.info("=" * 60)
+logger.info("✅  MongoDB / Beanie Initialized")
+logger.info(f"📂  DB  : {settings.MONGO_DB_NAME}")
+logger.info("=" * 60 + "\n")
