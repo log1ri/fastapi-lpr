@@ -1,7 +1,7 @@
 from app.models.user_org import User, UserPublic
 from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
 from app.models.cameras import cameras
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 class OcrMongoService:
     
@@ -15,18 +15,17 @@ class OcrMongoService:
     #2
     async def get_UID_by_organize(self, organize: Optional[str]):
 
-        print("Organization to lookup:", organize)
         user = await User.find_one(User.organization == organize).project(UserPublic)
         if not user:
             return None
         return str(user.id)
 
     
-    async def log_ocr(self, result: Dict[str, Any], organization: str):
+    async def log_ocr(self, ocr_data: Dict[str, Any], organization: str, image_url: List[str]) -> Dict[str, Any]:
         try:
             # destructure result
-            regNum = result.get("regNum")
-            province = result.get("province")
+            regNum = ocr_data.get("regNum")
+            province = ocr_data.get("province")
             # confidence = result.get("confidence")
             
  
@@ -37,7 +36,6 @@ class OcrMongoService:
 
 
             uId = await self.get_UID_by_organize(organization)
-            print("User ID:", uId)
             if not uId:
                 return {"error": f"Organization '{organization}' not found in users"}
  
@@ -49,8 +47,8 @@ class OcrMongoService:
                     subId=uId,
                     status=200,
                     images=OCRLogImages(
-                        original="test",
-                        processed="test",
+                        original=image_url[0],
+                        processed=image_url[1],
                     ),
                     content=OCRLogContent(
                         province=province,
