@@ -39,7 +39,10 @@ def get_ocr_service():
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     try:
+        # call OCR service in thread pool
         result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
+        
+        # destructure result
         ocr_data = {
             "regNum": result.get("regNum"),
             "province": result.get("province"),
@@ -52,6 +55,7 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             "croppedPlateImage": result.get("croppedPlateImage"),
         }
         
+        # fetch organization and subId
         organization = await mongo_service.mapCamId(payload.camId)
         subId = await mongo_service.get_UID_by_organize(organization)
         
@@ -59,47 +63,46 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             raise BusinessLogicError(f"Organization for Camera ID '{payload.camId}' not found")
         
         
+        
         now = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
         orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
         crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
         issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
         
-        if result.get("readStatus") == "complete":
-            
-            url = await do_service.upload_two_images(image_bytes.get("originalImage"), image_bytes.get("croppedPlateImage"), orig_path, crop_path)
-            # db = await mongo_service.log_ocr(ocr_data, organization)
-        else:
-            orig_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
-            print("orig_path:", orig_path)
-            url = await do_service.upload_image(image_bytes.get("originalImage"), orig_path, content_type="image/jpeg")
-            # db = None
             
         match result.get("readStatus"):
             case "complete":
-
+                # send 2 image and creat log
                 url = await do_service.upload_two_images(
                     image_bytes.get("originalImage"), 
                     image_bytes.get("croppedPlateImage"), 
                     orig_path, 
                     crop_path)
+                db = await mongo_service.log_ocr(ocr_data, organization,url)
+
                 
             case "no_text":
+                # has 2 images but send only croppedPlateImage to issue  pro path
                 url = await do_service.upload_image(
                     image_bytes.get("croppedPlateImage"), 
                     issue_pro_path, 
                     content_type="image/jpeg")
+                db= None
 
             case "no_plate":
+                # send only originalImage to issue pro path
                 url = await do_service.upload_image(
                     image_bytes.get("originalImage"), 
                     issue_pro_path, 
                     content_type="image/jpeg")
+                db= None
+
                
         
         return {
             "ocr-response": ocr_data, 
-            "do-service": url
-            # "log": db
+            "do-service": url,
+            "log": db
         }  
     
     except BusinessLogicError as e:

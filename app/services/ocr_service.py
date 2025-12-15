@@ -150,7 +150,7 @@ class OCRService:
     def group_and_sort_detections(self, detections: list[dict]) -> list[dict]:
         # sort by Y center 
         detections.sort(key=lambda k: k["y"])
-        print("Sorted Detections by Y:", detections)
+        # print("Sorted Detections by Y:", detections)
 
         sorted_detections: list[dict] = []
         current_line: list[dict] = []
@@ -209,9 +209,9 @@ class OCRService:
         else:
             avg_conf = 0.0
         
-        logger.info("Decoded Text:", decoded)
-        logger.info("Province:", province)
-        logger.info("Avg Confidence:", avg_conf)
+        logger.info("Decoded Text: %s", decoded)
+        logger.info("Province: %s", province)
+        logger.info("Avg Confidence: %.3f", avg_conf)
 
         return {"regNum": decoded, "Province": province, "confidence": avg_conf}
     
@@ -220,6 +220,7 @@ class OCRService:
             start_time = time.time()
             # 1 decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
+            print("\n\n")
             logger.info("Base64 decoding done.")
             if decoded is None:
                 logger.error("[OCR] invalid_image: base64 decode failed")
