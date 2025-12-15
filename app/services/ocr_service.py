@@ -1,19 +1,25 @@
 import cv2
 import base64
-import numpy as np
-from ultralytics import YOLO
-from app.routers.ocr import OCRServiceError
-from app.services.ocr_labelMapping import label_dict, province_map
-from datetime import datetime
-import time
 import logging
+import numpy as np
+import time
+from datetime import datetime
+from ultralytics import YOLO
+from app.services.ocr_labelMapping import label_dict, province_map
+
+class OCRServiceError(Exception):
+    """Custom error for OCR service failures."""
+    pass
+
 logger = logging.getLogger("ocr_service") 
 class OCRService:
        
 
     def __init__(self):
         try:
-            logger.info("========== ✅ Initializing OCR Service ==========")
+
+            logger.info("==============================================") 
+            logger.info("✅ Initializing OCR Service")
 
             # print("\n" + "=" * 60)
             # print("✅  OCR Service Initialized")
@@ -27,7 +33,7 @@ class OCRService:
             self.ocr_model = YOLO("./model/yolo/best_license_plate_recognition.pt") 
         
             logger.info("✅ OCR Service initialized successfully")
-            logger.info("==============================================") 
+            logger.info("=============================================="+"\n") 
         except Exception as e:
             print(f"Error initializing OCR Service: {e}")
             raise OCRServiceError(f"Failed to initialize OCR models: {e}")
@@ -121,12 +127,12 @@ class OCRService:
         y_centers = xywh[:, 1]
         heights = xywh[:, 3]
 
-        print("Classes:", cls_list)
-        print("Conf  :", confs)
+        # print("Classes:", cls_list)
+        # print("Conf  :", confs)
 
-        print("X Centers:", x_centers)
-        print("Y Centers:", y_centers)
-        print("Heights:", heights)
+        # print("X Centers:", x_centers)
+        # print("Y Centers:", y_centers)
+        # print("Heights:", heights)
 
         # create list of detections with [[ name, x_center, y_center, height ], ...]
         detections: list[dict] = []
@@ -203,9 +209,9 @@ class OCRService:
         else:
             avg_conf = 0.0
         
-        print("Decoded Text:", decoded)
-        print("Province:", province)
-        print("Avg Confidence:", avg_conf)
+        logger.info("Decoded Text:", decoded)
+        logger.info("Province:", province)
+        logger.info("Avg Confidence:", avg_conf)
 
         return {"regNum": decoded, "Province": province, "confidence": avg_conf}
     
@@ -216,7 +222,7 @@ class OCRService:
             decoded = self.decode_base64(img_base64)
             logger.info("Base64 decoding done.")
             if decoded is None:
-                print("[OCR] invalid_image: base64 decode failed")
+                logger.error("[OCR] invalid_image: base64 decode failed")
                 # decoding failed ใช้งานได้
                 return {
                     "error": "Invalid base64 image",
@@ -237,7 +243,7 @@ class OCRService:
             pre = self.preProcess(decoded)
             logger.info("Pre-processing done.")
             if pre is None:
-                print("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
+                logger.error("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
                 # pre-processing failed (cannot decode(cv) image) ใช้งานได้
                 return {
                     "error": "Cannot decode image(cv)",
@@ -258,7 +264,7 @@ class OCRService:
             plate_boxes = self.detect_plate(resized_decoded)
             logger.info("Plate detection done.")
             if plate_boxes is None:
-                print("[OCR] no_plate: YOLO plate detector found nothing")
+                logger.error("[OCR] no_plate: YOLO plate detector found nothing")
                 # no plate detected return error with original image --> issuelog ใช้งานได้
                 return {
                     "error": "No plate detected",
@@ -266,8 +272,7 @@ class OCRService:
                     "province": None,
                     "confidence": 0.0,
                     "readStatus": "no_plate",   
-                    # "originalImage": self.img_to_jpeg_bytes(original_frame),
-                    "originalImage": "xxx",
+                    "originalImage": self.img_to_jpeg_bytes(original_frame),
                     "croppedPlateImage": None,
                     "latencyMs": (time.time() - start_time) * 1000
                 }
@@ -292,23 +297,25 @@ class OCRService:
                     "readStatus": "no_text",  # อ่านไม่ออกเลย
                     # "originalImage": self.img_to_jpeg_bytes(original_frame),
                     # "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
-                    "originalImage": "xxx",
-                    "croppedPlateImage": "xxx",
+                    "originalImage": None,
+                    "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
                     "latencyMs": (time.time() - start_time) * 1000
                 }
             # ===========================================================
             
             # extract boxes and classes
             detections = self.build_detections(boxes)
-            print("Char detection done.")
+            logger.info("extract boxes and classes done.")
 
 
             # sort by y center first
             sorted_detections = self.group_and_sort_detections(detections)
-
+            logger.info("Sort by y center done.")
+            
             # decode plate text
             result = self.decode_plate_text(sorted_detections)
-            
+            logger.info("Decode plate text done.")
+
             # format output images
             original_img = self.img_to_jpeg_bytes(original_frame)
             crop_img = self.img_to_jpeg_bytes(cropped_plate)
@@ -319,12 +326,12 @@ class OCRService:
                 "province": result["Province"],
                 "confidence": result["confidence"],
                 "readStatus": 'complete' ,
-                "originalImage": "xxx",
-                "croppedPlateImage": "xxx",
+                "originalImage": original_img,
+                "croppedPlateImage": crop_img,
                 "latencyMs": (time.time() - start_time) * 1000
             }
         except Exception as e:
-            print(f"Error in OCR prediction: {e}")
+            logger.error(f"Error in OCR prediction: {e}")
             return {
                 "error": f"OCR prediction failed: {e}",
                 "regNum": None,
