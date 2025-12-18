@@ -9,15 +9,6 @@ from app.schemas.ocr import ImgBody
 from functools import lru_cache
 
 settings = get_settings()
-class BusinessLogicError(Exception):
-    pass
-
-
-class StorageServiceError(Exception):
-    pass
-
-class MongoLogError(Exception):
-    pass
 
 router = APIRouter(
     prefix="/ocr-service",
@@ -38,7 +29,7 @@ def get_ocr_service():
 
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
-    try:
+
         # call OCR service in thread pool
         result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
         
@@ -66,7 +57,7 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         
         now = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
         orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
-        crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
+        crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{now}.jpg".replace("subId", subId)
         issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
         
             
@@ -105,22 +96,6 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             "log": db
         }  
     
-    except BusinessLogicError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    except OCRServiceError as e:
-        raise HTTPException(status_code=502, detail=str(e))  # 502: Bad Gateway 
-
-    except StorageServiceError as e:
-        raise HTTPException(status_code=503, detail=str(e))  # 503: Storage/Service unavailable
-
-    except MongoLogError as e:
-        raise HTTPException(status_code=500, detail=str(e))  # internal server error log
-
-    except Exception as e:
-
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {e}")
-
 
 
 @router.post("/base64-to-img",status_code=201)
@@ -129,22 +104,22 @@ async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
     result = ocr_service.decode_base64(payload.imgBase64)
     return {"response": len(result)}  
 
-@router.post("/upload-test",status_code=201)
-async def test_upload():
-    try:
-        # สร้างไฟล์ปลอม ๆ ขึ้นมา
-        now = datetime.utcnow()
-        content = f"Hello from LPR test! {now.isoformat()}".encode("utf-8")
+# @router.post("/upload-test",status_code=201)
+# async def test_upload():
+#     try:
+#         # สร้างไฟล์ปลอม ๆ ขึ้นมา
+#         now = datetime.utcnow()
+#         content = f"Hello from LPR test! {now.isoformat()}".encode("utf-8")
 
-        # ตั้ง path บน DO
-        file_path = f"test/{now.timestamp()}.txt"
+#         # ตั้ง path บน DO
+#         file_path = f"test/{now.timestamp()}.txt"
 
-        url = await service.upload_bytes(content, file_path, content_type="text/plain")
+#         url = await service.upload_bytes(content, file_path, content_type="text/plain")
 
-        return {
-            "message": "uploaded!",
-            "url": url,
-            "path": file_path
-        }
-    except Exception as e:
-        return {"error": str(e)}
+#         return {
+#             "message": "uploaded!",
+#             "url": url,
+#             "path": file_path
+#         }
+#     except Exception as e:
+#         return {"error": str(e)}
