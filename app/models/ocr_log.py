@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from beanie import Document
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class OCRLogImages(BaseModel):
@@ -11,9 +11,10 @@ class OCRLogImages(BaseModel):
 
 
 class OCRLogContent(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)  # <-- add
     province: Optional[str] = None
     engine: str = "yolo"       # เช่น "yolo"
-    reg_num: Optional[str] = None      # ใช้ชื่อ field แบบ reg_num จะอ่านง่าย
+    reg_num: Optional[str] = Field(None, alias="reg-num")      # ใช้ชื่อ field แบบ reg_num จะอ่านง่าย
 
 
 class OCRLogMessage(BaseModel):
@@ -30,4 +31,4 @@ class OCRLog(Document):
     message: OCRLogMessage                         # detail ด้านใน
 
     class Settings:
-        name = "ocr_logs"  # ชื่อ collection ใน MongoDB`
+        name = "services_logs"  # ชื่อ collection ใน MongoDB`

@@ -4,6 +4,7 @@ import logging
 from botocore.config import Config
 from app.core.config import get_settings 
 from functools import lru_cache
+from app.core.exceptions import StorageServiceError, BusinessLogicError
 
 logger = logging.getLogger("DO_service") 
 settings = get_settings()
@@ -32,9 +33,12 @@ class DOService:
         return aioboto3.Session()
     
     async def upload_image(self, image: bytes, image_path: str, content_type="image/jpeg"):
-        session = self.get_session()
-
         try:
+            if not self.key or not self.secret or not self.bucket:
+                raise BusinessLogicError("DO Spaces credentials or bucket not configured")
+        
+            session = self.get_session()
+
             logger.info("Uploading image to DO Spaces...")
             async with session.client(
                 "s3",
@@ -51,11 +55,13 @@ class DOService:
                     ContentType=content_type,
                     ACL="public-read"
                 )
-            return f"{self.endpoint}/{self.bucket}/{image_path}"
+            return f"https://{self.bucket}.sgp1.digitaloceanspaces.com/{image_path}"
 
+        except BusinessLogicError:
+            raise
         except Exception as e:
-            print(f"Error uploading to DO Spaces: {e}")
-            raise e
+            logger.exception("Error uploading to DO Spaces (key=%s)", image_path)
+            raise StorageServiceError(f"DO Spaces upload failed: {e}") from e
         
     async def upload_two_images(
         self,
@@ -71,9 +77,11 @@ class DOService:
                 self.upload_image(cropped_bytes, path_cropped),
             )
             return url_original, url_cropped
+        except BusinessLogicError:
+            raise
         except Exception as e:
-            logger.error(f"Error uploading images to DO Spaces: {e}")
-            raise e
+            logger.exception("Error uploading two images to DO Spaces")
+            raise StorageServiceError(f"DO Spaces upload_two_images failed: {e}") from e
 
 
 

@@ -6,10 +6,7 @@ import time
 from datetime import datetime
 from ultralytics import YOLO
 from app.services.ocr_labelMapping import label_dict, province_map
-
-class OCRServiceError(Exception):
-    """Custom error for OCR service failures."""
-    pass
+from app.core.exceptions import OCRServiceError, BusinessLogicError
 
 logger = logging.getLogger("ocr_service") 
 class OCRService:
@@ -20,12 +17,6 @@ class OCRService:
 
             logger.info("==============================================") 
             logger.info("✅ Initializing OCR Service")
-
-            # print("\n" + "=" * 60)
-            # print("✅  OCR Service Initialized")
-            # print("🔎  Plate Model   : ./model/yolo/best_license_plate_detect.pt")
-            # print("🔤  OCR Model     : ./model/yolo/best_license_plate_recognition.pt")
-            # print("=" * 60 + "\n")
             logger.info("🔎 Loading plate model from: %s", "./model/yolo/best_license_plate_detect.pt")
             self.plate_model = YOLO("./model/yolo/best_license_plate_detect.pt")  
             
@@ -216,26 +207,17 @@ class OCRService:
         return {"regNum": decoded, "Province": province, "confidence": avg_conf}
     
     def predict(self, img_base64: str,organize: str | None = None) -> dict:
+        start_time = time.time()
         try:
-            start_time = time.time()
             # 1 decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
             print("\n\n")
             logger.info("Base64 decoding done.")
+            
             if decoded is None:
-                logger.error("[OCR] invalid_image: base64 decode failed")
                 # decoding failed ใช้งานได้
-                return {
-                    "error": "Invalid base64 image",
-                    "regNum": None,
-                    "province": None,
-                    "confidence": 0.0,
-                    "readStatus": "invalid_image",
-                    "originalImage": None,
-                    "croppedPlateImage": None,
-                    "latencyMs": (time.time() - start_time) * 1000
-
-                }
+                logger.warning("[OCR] invalid_image: base64 decode failed")
+                raise BusinessLogicError("Invalid base64 image")    
             
             # ===========================================================
             
@@ -244,18 +226,8 @@ class OCRService:
             pre = self.preProcess(decoded)
             logger.info("Pre-processing done.")
             if pre is None:
-                logger.error("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
-                # pre-processing failed (cannot decode(cv) image) ใช้งานได้
-                return {
-                    "error": "Cannot decode image(cv)",
-                    "regNum": None,
-                    "province": None,
-                    "confidence": 0.0,
-                    "readStatus": "invalid_image",
-                    "originalImage": None,
-                    "croppedPlateImage": None,
-                    "latencyMs": (time.time() - start_time) * 1000
-                }
+                logger.warning("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
+                raise BusinessLogicError("Unsupported/invalid image format (please send JPEG/PNG)")
             original_frame, resized_decoded = pre
             cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
             # ===========================================================
@@ -282,22 +254,33 @@ class OCRService:
             
             # ************************************************
             # 3. crop plate image and resize ============================
-            cropped_plate, resized_cropped_plate = self.crop_plate(resized_decoded, plate_boxes)
-
+            crop_res = self.crop_plate(resized_decoded, plate_boxes)
+            if crop_res is None:
+                logger.error("[OCR] crop_plate failed")
+                return {
+                    "error": "Cannot crop plate",
+                    "regNum": None,
+                    "province": None,
+                    "confidence": 0.0,
+                    "readStatus": "no_plate",
+                    "originalImage": self.img_to_jpeg_bytes(original_frame),  # ถ้าจะเก็บไป DO
+                    "croppedPlateImage": None,
+                    "latencyMs": (time.time() - start_time) * 1000
+                }
+            cropped_plate, resized_cropped_plate = crop_res
+            
             boxes = self.run_ocr_model(resized_cropped_plate)
             logger.info("Char detection done.")
 
             if boxes is None:
-                print("[OCR] no_text: OCR model found no characters")
+                logger.error("[OCR] no_text: OCR model found no characters")
                 # Plate detected but no text found ใช้งานได้
                 return {
                     "error": "No text detected",
                     "regNum": None,
                     "province": None,
                     "confidence": 0.0,
-                    "readStatus": "no_text",  # อ่านไม่ออกเลย
-                    # "originalImage": self.img_to_jpeg_bytes(original_frame),
-                    # "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
+                    "readStatus": "no_text",  
                     "originalImage": None,
                     "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
                     "latencyMs": (time.time() - start_time) * 1000
@@ -331,16 +314,10 @@ class OCRService:
                 "croppedPlateImage": crop_img,
                 "latencyMs": (time.time() - start_time) * 1000
             }
+        except BusinessLogicError:
+            raise
         except Exception as e:
-            logger.error(f"Error in OCR prediction: {e}")
-            return {
-                "error": f"OCR prediction failed: {e}",
-                "regNum": None,
-                "province": None,
-                "confidence": 0.0,
-                "readStatus": "error",
-                "originalImage": None,
-                "croppedPlateImage": None,
-                "latencyMs": (time.time() - start_time) * 1000
-            }
-        
+            logger.exception("Unhandled OCR error")
+            raise OCRServiceError(f"OCR prediction failed: {e}") from e
+
+            

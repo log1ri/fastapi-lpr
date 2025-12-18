@@ -2,6 +2,9 @@ from app.models.user_org import User, UserPublic
 from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
 from app.models.cameras import cameras
 from typing import Optional, Dict, Any, List
+from app.core.exceptions import MongoLogError, BusinessLogicError
+import logging
+logger = logging.getLogger("MONGO_service")
 
 class OcrMongoService:
     
@@ -30,14 +33,14 @@ class OcrMongoService:
             
  
             # organize = await self.mapCamId(camId)
-            print("Organization:", organization)
+            logger.info("Organization: %s", organization)
             if not organization:
-                return {"error": f"Organization '{organization}' not found in database"}
+                raise BusinessLogicError("organization is required")
 
 
             uId = await self.get_UID_by_organize(organization)
             if not uId:
-                return {"error": f"Organization '{organization}' not found in users"}
+                raise BusinessLogicError(f"Organization '{organization}' not found in users")
  
             try:
                 log = OCRLog(
@@ -65,13 +68,16 @@ class OcrMongoService:
                 }
 
             except Exception as e:
-                print("Mongo insert error:", e)
-                return {"error": f"Mongo insert failed: {e}"}
+                logger.exception("Mongo insert error")
+                raise MongoLogError(f"Mongo insert failed: {e}") from e
         
+        except BusinessLogicError:
+            raise  
+        except MongoLogError:
+            raise  
         except Exception as e:
-            return {
-                "error": f"Mongo failed: {e}",
-        }
+            logger.exception("Mongo failed")
+            raise MongoLogError(f"Mongo failed: {e}") from e
         
 
         
