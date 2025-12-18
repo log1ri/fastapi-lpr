@@ -8,10 +8,11 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import get_settings  
+from app.core.exceptions import AppError
+from app.core.exception_handlers import app_error_handler, unhandled_error_handler
 from app.db.database import  init_db
 from app.routers import ocr
 from app.routers import test
-
 
 
 settings = get_settings()
@@ -56,6 +57,9 @@ app.include_router(api_router, prefix=settings.API_VERSION)
 # include OCR service router with API version prefix
 app.include_router(ocr.router, prefix=settings.API_VERSION)
 app.include_router(test.router, prefix=settings.API_VERSION)
+# include exception handlers
+app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(Exception, unhandled_error_handler)
 logger.info("🚀 App starting up...")
 
 
