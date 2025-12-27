@@ -56,6 +56,9 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             "ocr_confidence": result.get("ocr_confidence"),
             "latencyMs": result.get("latencyMs"),
             "readStatus": result.get("readStatus"),
+            "engine": settings.MODEL,
+            "plate_model_name": settings.PLATE_MODEL_NAME,
+            "ocr_model_name": settings.OCR_MODEL_NAME,
 
         }
 
@@ -71,9 +74,7 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         if not organization or not subId:
             raise BusinessLogicError(f"Organization for Camera ID '{payload.camId}' not found")
         
-        
-        
-        # now = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+        # prepare DO image paths
         ts = next_id()
 
         orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)

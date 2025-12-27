@@ -7,12 +7,13 @@ from pydantic import BaseModel, Field, ConfigDict
 class OCRDetectionMetrics(BaseModel):
     model_name: str | None = None
     model_version: str | None = None
-    ocr_confidence: float | None = None
+    plate_confidence: float | None = None
+
 
 class OCRRecognitionMetrics(BaseModel):
     model_name: str | None = None
     model_version: str | None = None
-    plate_confidence: float | None = None
+    ocr_confidence: float | None = None
 
 class OCRMetrics(BaseModel):
     detection: OCRDetectionMetrics | None = None

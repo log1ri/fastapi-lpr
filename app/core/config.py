@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     PRO_IMG_LOG_PATH_PREFIX: str
 
     ISSUE_LOG_PATH_PREFIX: str
+    
+    PLATE_MODEL_PATH: str
+    OCR_MODEL_PATH: str
+    
+    MODEL: str = "yolo"
+    
+    YOLO_PLATE_CONF: float = 0.5
+    YOLO_OCR_CONF: float = 0.7
+    
+    YOLO_IMGSZ: int = 640
+    
+    PLATE_MODEL_NAME: str
+    OCR_MODEL_NAME: str
 
     class Config:
         env_file = ".env"

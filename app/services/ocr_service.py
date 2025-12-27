@@ -5,22 +5,23 @@ import numpy as np
 import time
 from ultralytics import YOLO
 from app.services.ocr_labelMapping import label_dict, province_map
+from app.core.config import get_settings  
 from app.core.exceptions import OCRServiceError, BusinessLogicError
 
 logger = logging.getLogger("ocr_service") 
+settings = get_settings()
 class OCRService:
        
-
     def __init__(self):
         try:
 
             logger.info("==============================================") 
             logger.info("✅ Initializing OCR Service")
-            logger.info("🔎 Loading plate model from: %s", "./model/yolo/best_license_plate_detect.pt")
-            self.plate_model = YOLO("./model/yolo/best_license_plate_detect.pt")  
+            logger.info("🔎 Loading plate model from: %s", settings.PLATE_MODEL_PATH)
+            self.plate_model = YOLO(settings.PLATE_MODEL_PATH)  
             
-            logger.info("🔤 Loading OCR model from:   %s", "./model/yolo/best_license_plate_recognition.pt")
-            self.ocr_model = YOLO("./model/yolo/best_license_plate_recognition.pt") 
+            logger.info("🔤 Loading OCR model from:   %s", settings.OCR_MODEL_PATH)
+            self.ocr_model = YOLO(settings.OCR_MODEL_PATH) 
         
             logger.info("✅ OCR Service initialized successfully")
             logger.info("=============================================="+"\n") 
@@ -71,10 +72,10 @@ class OCRService:
     def detect_plate(self, img: np.ndarray):
         plate_results = self.plate_model.predict(
             img, 
-            conf=0.5, 
+            conf=settings.YOLO_PLATE_CONF, 
             save=False, 
             verbose=False,
-            imgsz=640
+            imgsz=settings.YOLO_IMGSZ
         )
                 
         # Choose first image 
@@ -103,11 +104,11 @@ class OCRService:
     def run_ocr_model(self, plate_img: np.ndarray):
         results = self.ocr_model.predict(
             plate_img, 
-            conf=0.7, 
+            conf=settings.YOLO_OCR_CONF, 
             save=False, 
             save_txt=False, 
             verbose=False,
-            imgsz=640
+            imgsz=settings.YOLO_IMGSZ
         )
         
         # Choose first image

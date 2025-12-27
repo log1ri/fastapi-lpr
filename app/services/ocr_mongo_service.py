@@ -33,7 +33,11 @@ class OcrMongoService:
             plate_confidence = ocr_data.get("plate_confidence")
             ocr_confidence = ocr_data.get("ocr_confidence")
             latencyMs = ocr_data.get("latencyMs")
- 
+            engine = ocr_data.get("engine")
+            plate_model_name = ocr_data.get("plate_model_name")
+            ocr_model_name = ocr_data.get("ocr_model_name")
+            
+            
             # organize = await self.mapCamId(camId)
             logger.info("Organization: %s", organization)
             if not organization:
@@ -59,17 +63,18 @@ class OcrMongoService:
                         province=province,
                         province_iso=province_to_iso.get(province),
                         reg_num=regNum,
+                        engine=engine,
                     ),
                     metrics=OCRMetrics(
                         detection=OCRDetectionMetrics(
-                            model_name="yolo",
-                            model_version="v1.0",
-                            ocr_confidence=ocr_confidence,
-                        ),
-                        recognition=OCRRecognitionMetrics(
-                            model_name="yolo",
+                            model_name=plate_model_name,
                             model_version="v1.0",
                             plate_confidence=plate_confidence,
+                        ),
+                        recognition=OCRRecognitionMetrics(
+                            model_name=ocr_model_name,
+                            model_version="v1.0",
+                            ocr_confidence=ocr_confidence,
                         ),
                     )
                 ),
