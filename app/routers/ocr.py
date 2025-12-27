@@ -7,8 +7,11 @@ from app.services.ocr_mongo_service import OcrMongoService
 from app.services.do_space import DOService
 from app.schemas.ocr import ImgBody 
 from functools import lru_cache
+import time
 
 settings = get_settings()
+_last_ms = 0
+_counter = 0
 
 router = APIRouter(
     prefix="/ocr-service",
@@ -26,6 +29,17 @@ def get_ocr_service():
 # def get_ocr_service() -> OCRService:
 #     return OCRService()
 
+def next_id():
+    global _last_ms, _counter
+    ms = int(time.time() * 1000)
+    if ms == _last_ms:
+        _counter += 1
+    else:
+        _last_ms = ms
+        _counter = 0
+    return f"{ms}{_counter:03d}" 
+
+
 
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
@@ -37,8 +51,11 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         ocr_data = {
             "regNum": result.get("regNum"),
             "province": result.get("province"),
-            "confidence": result.get("confidence"),
+            "plate_confidence": result.get("plate_confidence"),
+            "ocr_confidence": result.get("ocr_confidence"),
+            "latencyMs": result.get("latencyMs"),
             "readStatus": result.get("readStatus"),
+
         }
 
         image_bytes = {
@@ -55,10 +72,12 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         
         
         
-        now = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
-        orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
-        crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{now}.jpg".replace("subId", subId)
-        issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{now}.jpg".replace("subId", subId)
+        # now = datetime.utcnow().strftime("%Y%m%d-%H%M%S-%f")
+        ts = next_id()
+
+        orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
+        crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{ts}.jpg".replace("subId", subId)
+        issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
         
             
         match result.get("readStatus"):
