@@ -4,17 +4,31 @@ from typing import Optional
 from beanie import Document
 from pydantic import BaseModel, Field, ConfigDict
 
+class OCRDetectionMetrics(BaseModel):
+    model_name: str | None = None
+    model_version: str | None = None
+    ocr_confidence: float | None = None
 
+class OCRRecognitionMetrics(BaseModel):
+    model_name: str | None = None
+    model_version: str | None = None
+    plate_confidence: float | None = None
+
+class OCRMetrics(BaseModel):
+    detection: OCRDetectionMetrics | None = None
+    recognition: OCRRecognitionMetrics | None = None
+    
 class OCRLogImages(BaseModel):
-    original: Optional[str] = None     # URL รูปเต็ม
-    processed: Optional[str] = None    # URL รูปที่ผ่าน OCR/crop แล้ว
+    original: Optional[str] = None     
+    processed: Optional[str] = None    
 
 
 class OCRLogContent(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)  # <-- add
+    model_config = ConfigDict(populate_by_name=True)  
     province: Optional[str] = None
-    engine: str = "yolo"       # เช่น "yolo"
-    reg_num: Optional[str] = Field(None, alias="reg-num")      # ใช้ชื่อ field แบบ reg_num จะอ่านง่าย
+    province_iso: Optional[str] = None
+    reg_num: Optional[str] = Field(None, alias="reg-num")  
+    engine: str = "yolo"     
 
 
 class OCRLogMessage(BaseModel):
@@ -22,13 +36,14 @@ class OCRLogMessage(BaseModel):
     status: Optional[int] = None
     images: Optional[OCRLogImages] = None
     content: Optional[OCRLogContent] = None
+    metrics: Optional[OCRMetrics] = None
 
 
 class OCRLog(Document):
-    level: str = "info"                             # info / error ฯลฯ
-    action: str = "extract_data_yolo"              # ชื่อ action
-    timestamp: datetime = datetime.utcnow()        # เวลา log
-    message: OCRLogMessage                         # detail ด้านใน
+    level: str = "info"                          
+    action: str = "extract_data_yolo"            
+    timestamp: datetime = datetime.utcnow()      
+    message: OCRLogMessage                       
 
     class Settings:
-        name = "services_logs"  # ชื่อ collection ใน MongoDB`
+        name = "services_logs"  

@@ -1,8 +1,9 @@
 from app.models.user_org import User, UserPublic
-from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
+from app.models.ocr_log import OCRDetectionMetrics, OCRRecognitionMetrics, OCRMetrics, OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
 from app.models.cameras import cameras
 from typing import Optional, Dict, Any, List
 from app.core.exceptions import MongoLogError, BusinessLogicError
+from app.services.ocr_labelMapping import province_to_iso
 import logging
 logger = logging.getLogger("MONGO_service")
 
@@ -29,8 +30,9 @@ class OcrMongoService:
             # destructure result
             regNum = ocr_data.get("regNum")
             province = ocr_data.get("province")
-            # confidence = result.get("confidence")
-            
+            plate_confidence = ocr_data.get("plate_confidence")
+            ocr_confidence = ocr_data.get("ocr_confidence")
+            latencyMs = ocr_data.get("latencyMs")
  
             # organize = await self.mapCamId(camId)
             logger.info("Organization: %s", organization)
@@ -55,8 +57,21 @@ class OcrMongoService:
                     ),
                     content=OCRLogContent(
                         province=province,
+                        province_iso=province_to_iso.get(province),
                         reg_num=regNum,
                     ),
+                    metrics=OCRMetrics(
+                        detection=OCRDetectionMetrics(
+                            model_name="yolo",
+                            model_version="v1.0",
+                            ocr_confidence=ocr_confidence,
+                        ),
+                        recognition=OCRRecognitionMetrics(
+                            model_name="yolo",
+                            model_version="v1.0",
+                            plate_confidence=plate_confidence,
+                        ),
+                    )
                 ),
                 )
                 await log.insert()
