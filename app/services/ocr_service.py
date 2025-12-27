@@ -71,19 +71,27 @@ class OCRService:
     # 3
     def detect_plate(self, img: np.ndarray):
         plate_results = self.plate_model.predict(
-            img, conf=0.5, 
+            img, 
+            conf=0.5, 
             save=False, 
             verbose=False,
+            imgsz=640
         )
-        
+                
+        # Choose first image 
         boxes = plate_results[0].boxes
         if boxes is None or len(boxes) == 0:
             return None
-        return boxes
+        
+        # choose box with highest confidence
+        best_idx = int(boxes.conf.argmax())
+
+        return boxes[best_idx:best_idx + 1]
     
     # 4
     def crop_plate(self, resized_decoded: np.ndarray, plate_boxes) -> tuple[np.ndarray, np.ndarray] | None:
         
+        # crop plate from original resized image
         x1, y1, x2, y2 = map(int, plate_boxes.xyxy[0])
         cropped_plate = resized_decoded[y1:y2, x1:x2]
         
@@ -99,9 +107,11 @@ class OCRService:
             conf=0.7, 
             save=False, 
             save_txt=False, 
-            verbose=False
+            verbose=False,
+            imgsz=640
         )
         
+        # Choose first image
         boxes = results[0].boxes
         if boxes is None or boxes.cls is None or len(boxes) == 0:
             return None
@@ -109,8 +119,11 @@ class OCRService:
     
     # 6
     def build_detections(self, boxes) -> list[dict]:
+        
         # get class ids and x/y centers
         cls_list = boxes.cls.cpu().numpy()
+       
+        # [x_center, y_center, width, height]
         xywh = boxes.xywh.cpu().numpy()
         confs = boxes.conf.cpu().numpy()
         
@@ -118,12 +131,6 @@ class OCRService:
         y_centers = xywh[:, 1]
         heights = xywh[:, 3]
 
-        # print("Classes:", cls_list)
-        # print("Conf  :", confs)
-
-        # print("X Centers:", x_centers)
-        # print("Y Centers:", y_centers)
-        # print("Heights:", heights)
 
         # create list of detections with [[ name, x_center, y_center, height ], ...]
         detections: list[dict] = []
@@ -141,7 +148,6 @@ class OCRService:
     def group_and_sort_detections(self, detections: list[dict]) -> list[dict]:
         # sort by Y center 
         detections.sort(key=lambda k: k["y"])
-        # print("Sorted Detections by Y:", detections)
 
         sorted_detections: list[dict] = []
         current_line: list[dict] = []
@@ -186,17 +192,18 @@ class OCRService:
         province = ""
 
         final_list = [(d["name"], d["x"], d["conf"]) for d in sorted_detections]
-        confs_for_text: list[float] = [] 
+        confs: list[float] = [] 
         
         for name, _, conf in final_list:
             if name in province_map:
                 province = label_dict.get(name, f"[{name}]")
             else:
                 decoded += label_dict.get(name, f"[{name}]")
-                confs_for_text.append(conf)
+                
+            confs.append(conf)
 
-        if confs_for_text:
-            avg_conf = sum(confs_for_text) / len(confs_for_text)
+        if confs:
+            avg_conf = sum(confs) / len(confs)
         else:
             avg_conf = 0.0
         
@@ -235,6 +242,7 @@ class OCRService:
 
             # detect plate ==============================================
             plate_boxes = self.detect_plate(resized_decoded)
+            
             logger.info("Plate detection done.")
             if plate_boxes is None:
                 logger.error("[OCR] no_plate: YOLO plate detector found nothing")
@@ -249,6 +257,7 @@ class OCRService:
                     "croppedPlateImage": None,
                     "latencyMs": (time.time() - start_time) * 1000
                 }
+            plate_confidence = float(plate_boxes.conf[0]) 
             # ===========================================================
 
             
@@ -308,7 +317,8 @@ class OCRService:
                 "error": None,
                 "regNum": result["regNum"],
                 "province": result["Province"],
-                "confidence": result["confidence"],
+                "plate_confidence": plate_confidence,
+                "ocr_confidence": result["confidence"],
                 "readStatus": 'complete' ,
                 "originalImage": original_img,
                 "croppedPlateImage": crop_img,
