@@ -6,6 +6,7 @@ from app.services.ocr_service import OCRService
 from app.services.ocr_mongo_service import OcrMongoService
 from app.services.do_space import DOService
 from app.schemas.ocr import ImgBody 
+from app.core.exceptions import BusinessLogicError
 from functools import lru_cache
 import time
 

@@ -3,7 +3,6 @@ import base64
 import logging
 import numpy as np
 import time
-from datetime import datetime
 from ultralytics import YOLO
 from app.services.ocr_labelMapping import label_dict, province_map
 from app.core.exceptions import OCRServiceError, BusinessLogicError
