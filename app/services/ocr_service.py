@@ -95,7 +95,8 @@ class OCRService:
         x1, y1, x2, y2 = map(int, plate_boxes.xyxy[0])
         cropped_plate = resized_decoded[y1:y2, x1:x2]
         
-        cv2.imwrite("debug_cropped_plate.jpg", cropped_plate)
+        # debug img
+        # cv2.imwrite("debug_cropped_plate.jpg", cropped_plate)
         
         resized_cropped_plate = self.resize_image(cropped_plate, target_size=(640, 640))
         return cropped_plate, resized_cropped_plate
@@ -236,7 +237,9 @@ class OCRService:
                 logger.warning("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
                 raise BusinessLogicError("Unsupported/invalid image format (please send JPEG/PNG)")
             original_frame, resized_decoded = pre
-            cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
+            
+            # debug img
+            # cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
             # ===========================================================
 
 
