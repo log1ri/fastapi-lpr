@@ -1,20 +1,58 @@
-.env
+# Git
+.git
 .gitignore
-.dockerignore
-/model/yolo/*
-.venv
-.vscode
+.gitkeep
+
+# Python Cache & Build Artifacts (ขยะจากการรัน)
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build
+develop-eggs
+dist
+downloads
+eggs
+.eggs
+lib
+lib64
+parts
+sdist
+var
+wheels
 *.egg-info
-app/img/
+.installed.cfg
+*.egg
+
+# Virtual Environments (ไม่เอา venv ที่เราสร้างในเครื่องเข้าไป)
+.venv
+venv
+ENV
+env
+
+# Environment Variables (สำคัญมาก ห้ามเอาเข้าไป! ควรกำหนดตอน docker run)
+.env
+
+# IDE Settings (VS Code, Pycharm)
+.vscode
+.idea
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Docker files
+Dockerfile
+.dockerignore
+
+
+# Model files
+model/yolo/*
+*.jpeg
+*.pt
+
 debug_cropped_plate.jpg
 debug_preprocessed.jpg
-uv.lock
-# Docker-generated files
-Dockerfile
-docker-compose.override.yml
-docker-compose.yml
+
