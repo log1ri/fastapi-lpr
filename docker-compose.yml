@@ -1,13 +1,15 @@
 services:
-  lpr-api:
+  api:
     image: lpr-fastapi:latest
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    # mount .env file
     env_file:
       - .env
+    # mount real path wiith container path
     volumes:
       - ./model:/app/model:ro
     restart: unless-stopped
