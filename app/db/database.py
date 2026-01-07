@@ -1,9 +1,8 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 from app.core.config import get_settings 
-from app.models.sample import Sample
 from app.models.user_org import User
-from app.models.ocr_log import OCRLogImages, OCRLogContent, OCRLogMessage,OCRLog
+from app.models.ocr_log import OCRLog
 from app.models.cameras import cameras
 import logging
 
