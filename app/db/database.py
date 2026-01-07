@@ -20,7 +20,6 @@ async def init_db():
     await init_beanie(
         database=client[settings.MONGO_DB_NAME],
         document_models=[
-            Sample,
             OCRLog,
             User,
             cameras,
