@@ -12,7 +12,6 @@ from app.core.exceptions import AppError
 from app.core.exception_handlers import app_error_handler, unhandled_error_handler
 from app.db.database import  init_db
 from app.routers import ocr
-from app.routers import test
 
 
 settings = get_settings()
@@ -56,7 +55,6 @@ api_router = APIRouter()
 app.include_router(api_router, prefix=settings.API_VERSION) 
 # include OCR service router with API version prefix
 app.include_router(ocr.router, prefix=settings.API_VERSION)
-app.include_router(test.router, prefix=settings.API_VERSION)
 # include exception handlers
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
@@ -84,6 +82,6 @@ async def health_check():
     
 
 @api_router.get("/")
-async def test():
+async def Who():
     return {"message": "Who are you?"}
 
