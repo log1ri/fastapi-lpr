@@ -51,5 +51,4 @@ class VehicleSession(Document):
             
             # cleanup abandoned 
             [("status", 1), ("lastSeenAt", 1)],
-            # หรือถ้า cleanup global ก็ใช้: [("status", 1), ("lastSeenAt", 1)]
         ]
