@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Optional
-
 from beanie import Document
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -43,7 +42,7 @@ class OCRLogMessage(BaseModel):
 class OCRLog(Document):
     level: str = "info"                          
     action: str = "extract_data_yolo"            
-    timestamp: datetime = datetime.utcnow()      
+    timestamp: datetime = Field(default_factory=datetime.utcnow)        
     message: OCRLogMessage                       
 
     class Settings:
