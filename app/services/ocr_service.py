@@ -26,7 +26,7 @@ class OCRService:
             logger.info("✅ OCR Service initialized successfully")
             logger.info("=============================================="+"\n") 
         except Exception as e:
-            print(f"Error initializing OCR Service: {e}")
+            logger.error(f"Error initializing OCR Service: {e}")
             raise OCRServiceError(f"Failed to initialize OCR models: {e}")
 
     def resize_image(self, image: np.ndarray, target_size=(640, 640)) -> np.ndarray:
@@ -52,7 +52,7 @@ class OCRService:
             return imgData
         
         except Exception as e:
-            print(f"Error decoding base64 image: {e}")
+            logger.error(f"Error decoding base64 image: {e}")
             return None
     
     # 2
