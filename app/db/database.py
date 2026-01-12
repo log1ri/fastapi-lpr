@@ -4,6 +4,7 @@ from app.core.config import get_settings
 from app.models.user_org import User
 from app.models.ocr_log import OCRLog
 from app.models.cameras import cameras
+from app.models.vehicle_session import VehicleSession
 import logging
 
 logger = logging.getLogger("MongoDB_service") 
@@ -22,6 +23,7 @@ async def init_db():
             OCRLog,
             User,
             cameras,
+            VehicleSession
         ],  
     )
     
