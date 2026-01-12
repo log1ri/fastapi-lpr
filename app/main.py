@@ -11,27 +11,35 @@ from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.core.exception_handlers import app_error_handler, unhandled_error_handler
 from app.db.database import  init_db
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.services.ocr_session_jobs import cleanup_sessions_job
 from app.routers import ocr
 
 
 settings = get_settings()
-
+scheduler = AsyncIOScheduler(timezone="UTC")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ⭐ Startup
+    
     await init_db()
-    # print("\n" + "=" * 60)
-    # print("✅  MongoDB Connected")
-    # print(f"📂  DB    : {settings.MONGO_DB_NAME}")
-    # print("=" * 60 + "\n")
+    # ✅ Start session cleanup scheduler
+    scheduler.add_job(
+        cleanup_sessions_job,
+        trigger="interval",
+        minutes=settings.JOB_CHECK_SESSION_INTERVAL,
+        id="cleanup_sessions",
+        max_instances=1,      # protect job overlap
+        coalesce=True,        # if a run is missed, combine into one run
+        misfire_grace_time=30
+    )
+    scheduler.start()
+    logger.info("✅ APScheduler started: cleanup_sessions_job every 1 minute")
 
     yield  # <– cut line between startup and shutdown
 
     # ⭐ Shutdown
-    # client.close()
-    # print("\n" + "=" * 60)
-    # print("🛑  MongoDB Disconnected")
-    # print("=" * 60 + "\n")
+
 
 # setup FastAPI app
 app = FastAPI(
@@ -60,16 +68,6 @@ app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 logger.info("🚀 App starting up...")
 
-
-
-@app.on_event("startup")
-async def startup_db_client():
-    pass
-
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    pass
 
 # Health check endpoint
 @app.get("/health",status_code=200, tags=["health"])

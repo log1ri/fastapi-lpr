@@ -23,6 +23,14 @@ LOGGING = {
         "level": "INFO",
         "handlers": ["console"],
     },
+    "loggers": {
+        "apscheduler": {
+            "level": "WARNING",  
+            "handlers": ["console"],
+            "propagate": False
+        },
+        
+    }
 }
 
 def setup_logging() -> None:
