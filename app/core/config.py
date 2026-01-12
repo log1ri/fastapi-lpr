@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     
     PLATE_MODEL_NAME: str
     OCR_MODEL_NAME: str
+    
+    SESSION_TIMEOUT_MINUTES: int = 15
+    JOB_CHECK_SESSION_INTERVAL: int = 1
 
     class Config:
         env_file = ".env"
