@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, HTTPException, Depends
+from fastapi import APIRouter, Body, HTTPException, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -7,6 +7,7 @@ from app.services.do_space import DOService
 from app.schemas.ocr import ImgBody 
 from app.core.exceptions import BusinessLogicError
 from functools import lru_cache
+import xml.etree.ElementTree as ET
 import time
 import uuid
 
@@ -167,22 +168,45 @@ async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRServi
         }
     return {"ocr-response": ocr_data}
 
-# @router.post("/upload-test",status_code=201)
-# async def test_upload():
-#     try:
-#         # สร้างไฟล์ปลอม ๆ ขึ้นมา
-#         now = datetime.utcnow()
-#         content = f"Hello from LPR test! {now.isoformat()}".encode("utf-8")
+@router.post("/hik/alarm")
+async def hik_alarm(request: Request):
 
-#         # ตั้ง path บน DO
-#         file_path = f"test/{now.timestamp()}.txt"
+    # body = await request.body()
+    # root = ET.fromstring(body)
+    # print(root.find("ipAddress").text) 
 
-#         url = await service.upload_bytes(content, file_path, content_type="text/plain")
+    # print("EVENT:", ET.tostring(root, encoding='utf8').decode('utf8'))
+    # return {
+    #     "ok": True,
+    #     "content_type": request.headers.get("content-type"),
+    #     "len": len(body),
+    #     "preview": body[:200].decode("utf-8", errors="ignore"),
+    # }
+    body = await request.body()
+    xml_text = body.decode("utf-8")
 
-#         return {
-#             "message": "uploaded!",
-#             "url": url,
-#             "path": file_path
-#         }
-#     except Exception as e:
-#         return {"error": str(e)}
+    # parse xml
+    root = ET.fromstring(xml_text)
+
+    # namespace ของ Hikvision
+    ns = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
+
+    # ดึงค่าที่ต้องใช้
+    event_type = root.find("hk:eventType", ns).text
+    target_type = root.find("hk:targetType", ns).text
+    ip = root.find("hk:ipAddress", ns).text
+    datetime = root.find("hk:dateTime", ns).text
+
+    x = root.find("hk:targetInfo/hk:targetRect/hk:X", ns).text
+    y = root.find("hk:targetInfo/hk:targetRect/hk:Y", ns).text
+
+    print("ip:", ip)
+    print("eventType:", event_type)
+    print("targetType:", target_type)   
+    return {
+        "ip": ip,
+        "eventType": event_type,
+        "targetType": target_type,
+        "datetime": datetime,
+        "rect": {"x": x, "y": y}
+    }
