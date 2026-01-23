@@ -17,6 +17,7 @@ dependencies = [
     "beanie>=2.0.1",
     "aioboto3>=7.0.0",
     "apscheduler>=3.11.2",
+    "python-multipart>=0.0.21",
 ]
 
 
