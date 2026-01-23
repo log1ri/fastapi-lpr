@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, HTTPException, Depends, Request
+from fastapi import APIRouter, Body, HTTPException, Depends, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 ####### new
 from fastapi.responses import Response
@@ -177,50 +177,81 @@ async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRServi
         }
     return {"ocr-response": ocr_data}
 
-NS = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
-def get_text(root: ET.Element, path: str, default: str | None = None) -> str | None:
-    el = root.find(path, NS)
-    if el is None or el.text is None:
+# NS = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
+# def get_text(root: ET.Element, path: str, default: str | None = None) -> str | None:
+#     el = root.find(path, NS)
+#     if el is None or el.text is None:
+#         return default
+#     return el.text.strip()
+
+def get_text(root, path, default=None):
+    # Namespace ของ Hikvision มักจะเป็นแบบนี้ แต่ถ้าไม่มี namespace ให้ตัด ns ออก
+    ns = {'hk': 'http://www.hikvision.com/ver20/XMLSchema'} 
+    try:
+        node = root.find(path, ns)
+        if node is None:
+            # ลองหาแบบไม่มี namespace เผื่อ firmware เก่า
+            node = root.find(path.replace('hk:', ''))
+        return node.text if node is not None else default
+    except:
         return default
-    return el.text.strip()
+    
+# def fetch_snapshot():
+#     try:
+#         r = requests.get(
+#             SNAP_URL,
+#             auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS),
+#             timeout=5
+#         )
+#         if r.ok:
+#             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+#             path = f"images/{ts}.jpg"
+#             with open(path, "wb") as f:
+#                 f.write(r.content)
+#             print("SNAP SAVED:", path)
+#         else:
+#             print("SNAPSHOT FAIL:", r.status_code)
+#     except Exception as e:
+#         print("SNAPSHOT ERROR:", e)
+
+def parse_alarm_xml(xml_text: str):
+    ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
+    root = ET.fromstring(xml_text)
+
+    data = {
+        "ip": root.findtext("h:ipAddress", namespaces=ns),
+        "channel": root.findtext("h:channelID", namespaces=ns),
+        "time": root.findtext("h:dateTime", namespaces=ns),
+        "event": root.findtext("h:eventType", namespaces=ns),
+        "state": root.findtext("h:eventState", namespaces=ns),
+        "target": root.findtext("h:targetType", namespaces=ns),
+        "x": root.findtext(".//h:X", namespaces=ns),
+        "y": root.findtext(".//h:Y", namespaces=ns),
+        "w": root.findtext(".//h:width", namespaces=ns),
+        "h": root.findtext(".//h:height", namespaces=ns),
+    }
+    return data
 
 @router.post("/hik/alarm")
 async def hik_alarm(request: Request):
 
-    body = await request.body()
-    ct = request.headers.get("content-type", "")
+    form = await request.form()
 
-    # log เพื่อจับว่าเข้ามาเป็นอะไร
-    logger.info("hik_alarm content-type=%s len=%d", ct, len(body))
-    logger.info("hik_alarm body(head)=%r", body[:200])
+    if "MoveDetection.xml" in form:
+        file = form["MoveDetection.xml"]
+        xml_bytes = await file.read()
+        xml_text = xml_bytes.decode("utf-8", errors="ignore")
 
-    if not body or body.strip() == b"":
-        return Response(content="empty body", status_code=400)
+        alarm = parse_alarm_xml(xml_text)
+        print(alarm)
 
-    # กัน BOM + whitespace
-    body = body.lstrip(b"\xef\xbb\xbf").strip()
+        # ตัวอย่าง logic
+        # if alarm["event"] == "VMD" and alarm["state"] == "active":
+        #     fetch_snapshot()
+    else:
+        print("NO XML FILE, RAW FORM:", form)
 
-    # parse xml (ส่ง bytes เข้าได้เลย)
-    try:
-        root = ET.fromstring(body)
-    except ET.ParseError as e:
-        logger.exception("XML parse failed: %s", e)
-        return Response(content="invalid xml", status_code=400)
-
-    event_type  = get_text(root, "hk:eventType", default="UNKNOWN")
-    target_type = get_text(root, "hk:targetType", default=None)
-    ip          = get_text(root, "hk:ipAddress", default=None)
-    dt          = get_text(root, "hk:dateTime", default=None)
-
-    logger.info("ip=%s eventType=%s targetType=%s dt=%s",
-                ip, event_type, target_type, dt)
-
-    return {
-        "ip": ip,
-        "eventType": event_type,
-        "targetType": target_type,
-        "datetime": dt,
-    }
+    return Response(status_code=200)
     # body = await request.body()
     # xml_text = body.decode("utf-8")
 
