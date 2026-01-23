@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Body, HTTPException, Depends, Request, requests
+from fastapi import APIRouter, Body, HTTPException, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 ####### new
 from fastapi.responses import Response
-from requests import request
-from requests.auth import HTTPDigestAuth
+# from requests.auth import HTTPDigestAuth
+import httpx
 ##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -178,36 +178,44 @@ async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRServi
         }
     return {"ocr-response": ocr_data}
 
-# NS = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
-# def get_text(root: ET.Element, path: str, default: str | None = None) -> str | None:
-#     el = root.find(path, NS)
-#     if el is None or el.text is None:
-#         return default
-#     return el.text.strip()
+async def fetch_snapshot(camera_ip: str, channel: str = "1") -> bool:
+    url = f"http://{camera_ip}/ISAPI/Streaming/channels/{channel}/picture"
 
-def get_text(root, path, default=None):
-    # Namespace ของ Hikvision มักจะเป็นแบบนี้ แต่ถ้าไม่มี namespace ให้ตัด ns ออก
-    ns = {'hk': 'http://www.hikvision.com/ver20/XMLSchema'} 
     try:
-        node = root.find(path, ns)
-        if node is None:
-            # ลองหาแบบไม่มี namespace เผื่อ firmware เก่า
-            node = root.find(path.replace('hk:', ''))
-        return node.text if node is not None else default
-    except:
-        return default
-    
-async def fetch_snapshot(CAMERA_IP):
-    try:
-        r = await requests.get(
-            f"http://{CAMERA_IP}/ISAPI/Streaming/channels/1/picture",
-            auth=HTTPDigestAuth("admin", "Rival_12"),
-            timeout=7
-        )
-        if r.ok:
-            print("SNAPSHOT SAVED")
+        async with httpx.AsyncClient(timeout=7) as client:
+            r = await client.get(
+                url,
+                auth=httpx.DigestAuth("admin", "Rival_12"),
+            )
+
+        if r.status_code == 200 and r.content:
+            print("✅ SNAPSHOT OK")
+            print("   content-type:", r.headers.get("content-type"))
+            print("   size(bytes):", len(r.content))
+            return True
+
+        print("❌ SNAPSHOT FAIL:", r.status_code)
+        print("   body:", (r.text or "")[:200])
+        return False
+
     except Exception as e:
-        print("SNAPSHOT ERROR:", e)
+        print("💥 SNAPSHOT ERROR:", repr(e))
+        return False
+    
+# async def fetch_snapshot(CAMERA_IP):
+#     try:
+#         r = await requests.get(
+#             f"http://{CAMERA_IP}/ISAPI/Streaming/channels/1/picture",
+#             auth=HTTPDigestAuth("admin", "Rival_12"),
+#             timeout=7
+#         )
+#         if r.ok:
+#             print("SNAPSHOT SAVED")
+#         else:
+#             print("SNAPSHOT FAIL:", r.status_code)
+            
+#     except Exception as e:
+#         print("SNAPSHOT ERROR:", e)
 
 async def parse_alarm_xml(xml_text: str):
     ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
@@ -232,7 +240,7 @@ async def parse_alarm_xml(xml_text: str):
 async def hik_alarm(request: Request):
 
     form = await request.form()
-
+    
     if "MoveDetection.xml" in form:
         file = form["MoveDetection.xml"]
         xml_bytes = await file.read()
@@ -243,7 +251,7 @@ async def hik_alarm(request: Request):
 
         # ตัวอย่าง logic
         if alarm["event"] == "VMD" and alarm["state"] == "active":
-            fetch_snapshot(alarm["ip"])
+            await fetch_snapshot(alarm["ip"])
     else:
         print("NO XML FILE, RAW FORM:", form)
 
