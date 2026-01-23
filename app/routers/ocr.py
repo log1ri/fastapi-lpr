@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Body, HTTPException, Depends, Request
+from fastapi import APIRouter, Body, HTTPException, Depends, Request, requests
 from fastapi.concurrency import run_in_threadpool
 ####### new
 from fastapi.responses import Response
 from requests import request
+from requests.auth import HTTPDigestAuth
 ##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -196,25 +197,19 @@ def get_text(root, path, default=None):
     except:
         return default
     
-# def fetch_snapshot():
-#     try:
-#         r = requests.get(
-#             SNAP_URL,
-#             auth=HTTPDigestAuth(CAMERA_USER, CAMERA_PASS),
-#             timeout=5
-#         )
-#         if r.ok:
-#             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-#             path = f"images/{ts}.jpg"
-#             with open(path, "wb") as f:
-#                 f.write(r.content)
-#             print("SNAP SAVED:", path)
-#         else:
-#             print("SNAPSHOT FAIL:", r.status_code)
-#     except Exception as e:
-#         print("SNAPSHOT ERROR:", e)
+async def fetch_snapshot(CAMERA_IP):
+    try:
+        r = await requests.get(
+            f"http://{CAMERA_IP}/ISAPI/Streaming/channels/1/picture",
+            auth=HTTPDigestAuth("admin", "Rival_12"),
+            timeout=7
+        )
+        if r.ok:
+            print("SNAPSHOT SAVED")
+    except Exception as e:
+        print("SNAPSHOT ERROR:", e)
 
-def parse_alarm_xml(xml_text: str):
+async def parse_alarm_xml(xml_text: str):
     ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
     root = ET.fromstring(xml_text)
 
@@ -225,6 +220,7 @@ def parse_alarm_xml(xml_text: str):
         "event": root.findtext("h:eventType", namespaces=ns),
         "state": root.findtext("h:eventState", namespaces=ns),
         "target": root.findtext("h:targetType", namespaces=ns),
+        # "camName": root.findtext("h:channelName", namespaces=ns),
         "x": root.findtext(".//h:X", namespaces=ns),
         "y": root.findtext(".//h:Y", namespaces=ns),
         "w": root.findtext(".//h:width", namespaces=ns),
@@ -242,41 +238,14 @@ async def hik_alarm(request: Request):
         xml_bytes = await file.read()
         xml_text = xml_bytes.decode("utf-8", errors="ignore")
 
-        alarm = parse_alarm_xml(xml_text)
+        alarm = await parse_alarm_xml(xml_text)
         print(alarm)
 
         # ตัวอย่าง logic
-        # if alarm["event"] == "VMD" and alarm["state"] == "active":
-        #     fetch_snapshot()
+        if alarm["event"] == "VMD" and alarm["state"] == "active":
+            fetch_snapshot(alarm["ip"])
     else:
         print("NO XML FILE, RAW FORM:", form)
 
     return Response(status_code=200)
-    # body = await request.body()
-    # xml_text = body.decode("utf-8")
-
-    # # parse xml
-    # root = ET.fromstring(xml_text)
-
-    # # namespace ของ Hikvision
-    # ns = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
-
-    # # ดึงค่าที่ต้องใช้
-    # event_type = root.find("hk:eventType", ns).text
-    # target_type = root.find("hk:targetType", ns).text
-    # ip = root.find("hk:ipAddress", ns).text
-    # datetime = root.find("hk:dateTime", ns).text
-
-    # x = root.find("hk:targetInfo/hk:targetRect/hk:X", ns).text
-    # y = root.find("hk:targetInfo/hk:targetRect/hk:Y", ns).text
-
-    # print("ip:", ip)
-    # print("eventType:", event_type)
-    # print("targetType:", target_type)   
-    # return {
-    #     "ip": ip,
-    #     "eventType": event_type,
-    #     "targetType": target_type,
-    #     "datetime": datetime,
-    #     "rect": {"x": x, "y": y}
-    # }
+    
