@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Body, HTTPException, Depends, Request
 from fastapi.concurrency import run_in_threadpool
+####### new
+from fastapi.responses import Response
+from requests import request
+##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
 from app.services.ocr_mongo_service import OcrMongoService
@@ -8,6 +12,11 @@ from app.schemas.ocr import ImgBody
 from app.core.exceptions import BusinessLogicError
 from functools import lru_cache
 import xml.etree.ElementTree as ET
+########### new
+import logging
+router = APIRouter()
+logger = logging.getLogger(__name__)
+###########
 import time
 import uuid
 
@@ -168,45 +177,75 @@ async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRServi
         }
     return {"ocr-response": ocr_data}
 
+NS = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
+def get_text(root: ET.Element, path: str, default: str | None = None) -> str | None:
+    el = root.find(path, NS)
+    if el is None or el.text is None:
+        return default
+    return el.text.strip()
+
 @router.post("/hik/alarm")
 async def hik_alarm(request: Request):
 
-    # body = await request.body()
-    # root = ET.fromstring(body)
-    # print(root.find("ipAddress").text) 
-
-    # print("EVENT:", ET.tostring(root, encoding='utf8').decode('utf8'))
-    # return {
-    #     "ok": True,
-    #     "content_type": request.headers.get("content-type"),
-    #     "len": len(body),
-    #     "preview": body[:200].decode("utf-8", errors="ignore"),
-    # }
     body = await request.body()
-    xml_text = body.decode("utf-8")
+    ct = request.headers.get("content-type", "")
 
-    # parse xml
-    root = ET.fromstring(xml_text)
+    # log เพื่อจับว่าเข้ามาเป็นอะไร
+    logger.info("hik_alarm content-type=%s len=%d", ct, len(body))
+    logger.info("hik_alarm body(head)=%r", body[:200])
 
-    # namespace ของ Hikvision
-    ns = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
+    if not body or body.strip() == b"":
+        return Response(content="empty body", status_code=400)
 
-    # ดึงค่าที่ต้องใช้
-    event_type = root.find("hk:eventType", ns).text
-    target_type = root.find("hk:targetType", ns).text
-    ip = root.find("hk:ipAddress", ns).text
-    datetime = root.find("hk:dateTime", ns).text
+    # กัน BOM + whitespace
+    body = body.lstrip(b"\xef\xbb\xbf").strip()
 
-    x = root.find("hk:targetInfo/hk:targetRect/hk:X", ns).text
-    y = root.find("hk:targetInfo/hk:targetRect/hk:Y", ns).text
+    # parse xml (ส่ง bytes เข้าได้เลย)
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as e:
+        logger.exception("XML parse failed: %s", e)
+        return Response(content="invalid xml", status_code=400)
 
-    print("ip:", ip)
-    print("eventType:", event_type)
-    print("targetType:", target_type)   
+    event_type  = get_text(root, "hk:eventType", default="UNKNOWN")
+    target_type = get_text(root, "hk:targetType", default=None)
+    ip          = get_text(root, "hk:ipAddress", default=None)
+    dt          = get_text(root, "hk:dateTime", default=None)
+
+    logger.info("ip=%s eventType=%s targetType=%s dt=%s",
+                ip, event_type, target_type, dt)
+
     return {
         "ip": ip,
         "eventType": event_type,
         "targetType": target_type,
-        "datetime": datetime,
-        "rect": {"x": x, "y": y}
+        "datetime": dt,
     }
+    # body = await request.body()
+    # xml_text = body.decode("utf-8")
+
+    # # parse xml
+    # root = ET.fromstring(xml_text)
+
+    # # namespace ของ Hikvision
+    # ns = {"hk": "http://www.hikvision.com/ver20/XMLSchema"}
+
+    # # ดึงค่าที่ต้องใช้
+    # event_type = root.find("hk:eventType", ns).text
+    # target_type = root.find("hk:targetType", ns).text
+    # ip = root.find("hk:ipAddress", ns).text
+    # datetime = root.find("hk:dateTime", ns).text
+
+    # x = root.find("hk:targetInfo/hk:targetRect/hk:X", ns).text
+    # y = root.find("hk:targetInfo/hk:targetRect/hk:Y", ns).text
+
+    # print("ip:", ip)
+    # print("eventType:", event_type)
+    # print("targetType:", target_type)   
+    # return {
+    #     "ip": ip,
+    #     "eventType": event_type,
+    #     "targetType": target_type,
+    #     "datetime": datetime,
+    #     "rect": {"x": x, "y": y}
+    # }
