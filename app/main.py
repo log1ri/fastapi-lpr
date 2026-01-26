@@ -1,4 +1,5 @@
 import logging
+import httpx
 from app.core.logging_config import setup_logging
 
 setup_logging()
@@ -23,6 +24,13 @@ async def lifespan(app: FastAPI):
     # ⭐ Startup
     
     await init_db()
+    
+    global client
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
+        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    )
+    
     # ✅ Start session cleanup scheduler
     scheduler.add_job(
         cleanup_sessions_job,
@@ -33,13 +41,23 @@ async def lifespan(app: FastAPI):
         coalesce=True,        # if a run is missed, combine into one run
         misfire_grace_time=30
     )
-    scheduler.start()
+    
+    if not scheduler.running:
+        scheduler.start()
+        
     logger.info("✅ APScheduler started: cleanup_sessions_job every 1 minute")
 
     yield  # <– cut line between startup and shutdown
 
     # ⭐ Shutdown
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        pass
 
+    if client:
+        await client.aclose()
+        client = None
 
 # setup FastAPI app
 app = FastAPI(

@@ -56,15 +56,15 @@ def next_id():
 
 
 # 1) จำกัดจำนวน snapshot พร้อมกันทั้งระบบ
-SNAPSHOT_SEM = asyncio.Semaphore(3)   # ปรับเป็น 2-5 ตามแรงเครื่อง/เน็ต
+SNAPSHOT_SEM = asyncio.Semaphore(1)   # ปรับเป็น 2-5 ตามแรงเครื่อง/เน็ต
 
 _last_shot = {}  # ip -> monotonic time
-COOLDOWN_SEC = 1.0
-
-client = httpx.AsyncClient(
-    timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
-    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-)
+COOLDOWN_SEC = 2
+client: httpx.AsyncClient | None = None
+# client = httpx.AsyncClient(
+#     timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
+#     limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+# )
 
 def safe_create_task(coro):
     t = asyncio.create_task(coro)
