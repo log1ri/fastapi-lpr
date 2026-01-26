@@ -25,8 +25,8 @@ async def lifespan(app: FastAPI):
     
     await init_db()
     
-    global client
-    client = httpx.AsyncClient(
+    
+    app.state.http_client  = httpx.AsyncClient(
         timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
@@ -55,9 +55,9 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
-    if client:
-        await client.aclose()
-        client = None
+    if app.state.http_client:
+        await app.state.http_client.aclose()
+        app.state.http_client = None
 
 # setup FastAPI app
 app = FastAPI(

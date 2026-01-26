@@ -60,7 +60,6 @@ SNAPSHOT_SEM = asyncio.Semaphore(1)   # ปรับเป็น 2-5 ตาม�
 
 _last_shot = {}  # ip -> monotonic time
 COOLDOWN_SEC = 2
-client: httpx.AsyncClient | None = None
 # client = httpx.AsyncClient(
 #     timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
 #     limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
@@ -76,7 +75,7 @@ def safe_create_task(coro):
     t.add_done_callback(_cb)
     return t
 
-async def fetch_snapshot(ip: str):
+async def fetch_snapshot(ip: str, client: httpx.AsyncClient):
     now = time.monotonic()
 
     # cooldown: ถ้ายิงถี่เกิน ข้ามไปเลย
@@ -331,7 +330,8 @@ async def hik_alarm(request: Request):
         # ตัวอย่าง logic
         if alarm["event"] == "VMD" and alarm["state"] == "active":
             # asyncio.create_task(fetch_snapshot(alarm["ip"]))  
-            safe_create_task(fetch_snapshot(alarm["ip"]))
+            client = request.app.state.http_client
+            safe_create_task(fetch_snapshot(alarm["ip"],client))
     else:
         print("NO XML FILE, RAW FORM:", form)
 
