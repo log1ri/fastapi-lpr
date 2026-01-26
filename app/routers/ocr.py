@@ -4,7 +4,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 import requests
 from requests.auth import HTTPDigestAuth
-# import httpx
+import asyncio
+import asyncio
+import httpx
 ##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -203,20 +205,31 @@ async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRServi
 #         print("💥 SNAPSHOT ERROR:", repr(e))
 #         return False
     
-async def fetch_snapshot(CAMERA_IP):
-    try:
-        r = await requests.get(
-            f"http://{CAMERA_IP}/ISAPI/Streaming/channels/1/picture",
-            auth=HTTPDigestAuth("admin", "Rival_12"),
-            timeout=7
-        )
-        if r.ok:
-            print("SNAPSHOT SAVED")
-        else:
-            print("SNAPSHOT FAIL:", r.status_code)
+# async def fetch_snapshot(CAMERA_IP):
+#     try:
+#         r = await requests.get(
+#             f"http://{CAMERA_IP}/ISAPI/Streaming/channels/1/picture",
+#             auth=HTTPDigestAuth("admin", "Rival_12"),
+#             timeout=7
+#         )
+#         if r.ok:
+#             print("SNAPSHOT SAVED")
+#         else:
+#             print("SNAPSHOT FAIL:", r.status_code)
             
-    except Exception as e:
-        print("SNAPSHOT ERROR:", e)
+#     except Exception as e:
+#         print("SNAPSHOT ERROR:", e)
+async def fetch_snapshot(ip: str):
+    url = f"http://{ip}/ISAPI/Streaming/channels/1/picture"
+    async with httpx.AsyncClient(timeout=7) as client:
+        r = await client.get(url, auth=httpx.DigestAuth("admin","Rival_12"))
+        if r.status_code == 200:
+            print("✅ SNAPSHOT OK")
+            print("   content-type:", r.headers.get("content-type"))
+            print("   size(bytes):", len(r.content))
+            return True
+        print("❌ SNAPSHOT FAIL:", r.status_code)
+        return False
 
 async def parse_alarm_xml(xml_text: str):
     ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
@@ -252,7 +265,7 @@ async def hik_alarm(request: Request):
 
         # ตัวอย่าง logic
         if alarm["event"] == "VMD" and alarm["state"] == "active":
-            await fetch_snapshot(alarm["ip"])
+            asyncio.create_task(fetch_snapshot(alarm["ip"]))  # ✅ ไม่บล็อก
     else:
         print("NO XML FILE, RAW FORM:", form)
 
