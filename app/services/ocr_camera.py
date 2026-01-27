@@ -55,7 +55,7 @@ class HikSnapshotService:
             self._ip_locks[ip] = lock
         return lock
     
-    def next_id():
+    def next_id(self):
         global _last_ms, _counter
         ms = int(time.time() * 1000)
         if ms == _last_ms:
