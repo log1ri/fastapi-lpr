@@ -69,12 +69,13 @@ class HikSnapshotService:
             return None
         self._last_shot[ip] = now
 
-        url = f"http://{ip}/ISAPI/Streaming/channels/1/picture"
+        url = f"http://{ip}/ISAPI/Streaming/channels/101/picture"
 
         async with self._sem:
             # try multiple times
             for attempt in range(self.retries):
                 try:
+                    print(self.username,self.password)
                     r = await self.client.get(
                         url,
                         auth=httpx.DigestAuth(self.username, self.password),
