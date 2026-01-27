@@ -138,8 +138,7 @@ class HikSnapshotService:
         }
         return data
 
-    
-    async def snap_and_process(self, ip: str, alarm: dict):
+    async def snap_and_process(self, ip: str, macAddress: str):
         
         url = None
         db = None
