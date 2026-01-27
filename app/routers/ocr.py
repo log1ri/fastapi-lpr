@@ -147,7 +147,7 @@ async def hik_alarm(request: Request):
             return Response(status_code=200)
         # check alarm cooldown
         if await svc.should_trigger(ip):
-            svc.create_task(svc.fetch_snapshot(ip))
+            svc.create_task(svc.snap_and_process(ip))
 
         
     else:
