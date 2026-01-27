@@ -135,7 +135,6 @@ async def hik_alarm(request: Request):
 
         # parse XML
         alarm = await svc.parse_alarm_xml(xml_text)
-        print("\n")
         logger.info(alarm)
 
         # check event type
