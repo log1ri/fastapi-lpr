@@ -13,7 +13,7 @@ class HikSnapshotService:
         cooldown_sec: float = 3.0,
         alarm_cooldown_sec: float = 3.0,
         max_concurrent: int = 2,
-        retries: int = 1,
+        retries: int = 2,
         backoff_base: float = 0.2,
     ):
         self.client = client
