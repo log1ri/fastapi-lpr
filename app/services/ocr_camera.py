@@ -12,6 +12,8 @@ from app.services.do_space import DOService
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+_last_ms = 0
+_counter = 0
 do_service = DOService()
 mongo_service = OcrMongoService()
 ocr_service_instance = OCRService()
@@ -52,6 +54,16 @@ class HikSnapshotService:
             lock = asyncio.Lock()
             self._ip_locks[ip] = lock
         return lock
+    
+    def next_id():
+        global _last_ms, _counter
+        ms = int(time.time() * 1000)
+        if ms == _last_ms:
+            _counter += 1
+        else:
+            _last_ms = ms
+            _counter = 0
+        return f"{ms}{_counter:03d}" 
 
     async def should_trigger(self, ip: str) -> bool:
         """check alarm cooldown"""
@@ -144,13 +156,18 @@ class HikSnapshotService:
         db = None
         session = None
         
+        # fetch snapshot
         img = await self.fetch_snapshot(ip)
         if not img:
+            logger.error("No snapshot image fetched ip=%s", ip)
             return
+        
+        # img encode base64
         img_b64 = base64.b64encode(img).decode("utf-8")
         
+        # run ocr in threadpool
         result =  await run_in_threadpool(ocr_service_instance.predict, img_b64)
-    
+
         # destructure result
         ocr_data = {
             "regNum": result.get("regNum"),
@@ -164,8 +181,86 @@ class HikSnapshotService:
             "ocr_model_name": settings.OCR_MODEL_NAME,
         }
         
+        image_bytes = {
+            "originalImage": result.get("originalImage"),
+            "croppedPlateImage": result.get("croppedPlateImage"),
+        }
         
+        # fetch organization and subId
+        camerasData = await mongo_service.mapCamId(macAddress)
+        if not camerasData:
+            logger.warning("Camera not found mac=%s ip=%s", macAddress, ip)
+            return
+
+        organization, direction = camerasData
+        subId = await mongo_service.get_UID_by_organize(organization)
+
+        if not organization or not subId or not direction:
+            logger.warning("Organization/SubId/Direction not found mac=%s ip=%s", macAddress, ip)
+            return        
         
+        # prepare DO image paths
+        ts = self.next_id()
+
+        orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
+        crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{ts}.jpg".replace("subId", subId)
+        issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
+
+        
+        read_status = result.get("readStatus")
+        match read_status:
+            case "complete":
+                # send 2 image and creat log
+                if not image_bytes.get("originalImage") or not image_bytes.get("croppedPlateImage"):
+                    logger.error("Missing images for readStatus 'complete' mac=%s ip=%s", macAddress, ip)
+                    return
+                
+                url = await do_service.upload_two_images(
+                    image_bytes.get("originalImage"), 
+                    image_bytes.get("croppedPlateImage"), 
+                    orig_path, 
+                    crop_path)
+                db = await mongo_service.log_ocr(ocr_data, organization,url, subId)
+                session = await mongo_service.resolve_session_from_log(db,direction, macAddress)
+
+                
+            case "no_text":
+                # has 2 images but send only croppedPlateImage to issue  pro path
+                if not image_bytes.get("croppedPlateImage"):
+                    logger.error("Missing croppedPlateImage for readStatus 'no_text' mac=%s ip=%s", macAddress, ip)
+                    return
+                
+                url = await do_service.upload_image(
+                    image_bytes.get("croppedPlateImage"), 
+                    issue_pro_path, 
+                    content_type="image/jpeg")
+                db = None
+                session = None
+
+            case "no_plate":
+                # send only originalImage to issue pro path
+                if not image_bytes.get("originalImage"):
+                    logger.error("Missing originalImage for readStatus 'no_plate' mac=%s ip=%s", macAddress, ip)
+                    return
+                
+                url = await do_service.upload_image(
+                    image_bytes.get("originalImage"), 
+                    issue_pro_path, 
+                    content_type="image/jpeg")
+                db = None
+                session = None
+
+            case _:
+                logger.error("Unknown readStatus '%s' mac=%s ip=%s", read_status, macAddress, ip)
+                return  
+
+        logger.info(
+            "PIPELINE DONE ip=%s plate=%s status=%s",
+            ip,
+            ocr_data.get("regNum"),
+            ocr_data.get("readStatus"),
+        )
+    
         
         
         

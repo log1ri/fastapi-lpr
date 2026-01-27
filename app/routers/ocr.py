@@ -5,9 +5,7 @@ from fastapi.responses import Response
 import requests
 from requests.auth import HTTPDigestAuth
 import asyncio
-import asyncio
 import httpx
-# from app.utils.ocr import parse_alarm_xml
 ##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -15,7 +13,6 @@ from app.services.ocr_mongo_service import OcrMongoService
 from app.services.do_space import DOService
 from app.schemas.ocr import ImgBody 
 from app.core.exceptions import BusinessLogicError
-# from app.services.ocr_camera import HikSnapshotService  
 
 from functools import lru_cache
 ########### new
@@ -56,66 +53,6 @@ def next_id():
     # return f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
 
 
-# # 1) จำกัดจำนวน snapshot พร้อมกันทั้งระบบ
-# SNAPSHOT_SEM = asyncio.Semaphore(1)   # ปรับเป็น 2-5 ตามแรงเครื่อง/เน็ต
-
-# # _last_shot = {}  # ip -> monotonic time
-# # COOLDOWN_SEC = 2
-# COOLDOWN_SEC = 2.0
-# ALARM_COOLDOWN_SEC = 1.0  
-# _last_shot: dict[str, float] = {}
-# _last_alarm: dict[str, float] = {}   
-# _ip_locks: dict[str, asyncio.Lock] = {}
-
-# def _get_lock(ip: str) -> asyncio.Lock:
-#     lock = _ip_locks.get(ip)
-#     if lock is None:
-#         lock = asyncio.Lock()
-#         _ip_locks[ip] = lock
-#     return lock
-
-# def safe_create_task(coro):
-#     t = asyncio.create_task(coro)
-#     def _cb(task: asyncio.Task):
-#         try:
-#             task.result()
-#         except Exception as e:
-#             logger.exception("snapshot task failed: %s", e)
-#     t.add_done_callback(_cb)
-#     return t
-
-# async def fetch_snapshot(ip: str, client: httpx.AsyncClient):
-#     now = time.monotonic()
-
-#     # cooldown: ถ้ายิงถี่เกิน ข้ามไปเลย
-#     last = _last_shot.get(ip, 0)
-#     if now - last < COOLDOWN_SEC:
-#         return
-#     _last_shot[ip] = now
-
-#     url = f"http://{ip}/ISAPI/Streaming/channels/1/picture"
-
-#     async with SNAPSHOT_SEM:
-#         # retry เบา ๆ สำหรับ timeout/503
-#         for attempt in range(2):
-#             try:
-#                 r = await client.get(url, auth=httpx.DigestAuth("admin", "Rival_12"))
-#                 if r.status_code == 200:
-#                     logger.info("SNAPSHOT OK size=%d", len(r.content))
-#                     # TODO: save r.content
-#                     return
-#                 elif r.status_code in (401, 403):
-#                     logger.warning("SNAPSHOT AUTH %s", r.status_code)
-#                     # digest บางครั้งต้อง 401 ก่อน เป็นปกติ แต่ถ้าค้างอยู่ 401 ตลอด = user/pass หรือสิทธิ์ผิด
-#                 elif r.status_code == 503:
-#                     logger.warning("SNAPSHOT 503 (camera busy) attempt=%d", attempt+1)
-#                 else:
-#                     logger.warning("SNAPSHOT FAIL %s", r.status_code)
-#                     return
-#             except (httpx.ReadTimeout, httpx.ConnectTimeout):
-#                 logger.warning("SNAPSHOT TIMEOUT attempt=%d", attempt+1)
-
-#             await asyncio.sleep(0.2 * (attempt + 1))  # backoff สั้น ๆ
 
 
 @router.post("/hik/alarm")
@@ -135,7 +72,7 @@ async def hik_alarm(request: Request):
 
         # parse XML
         alarm = await svc.parse_alarm_xml(xml_text)
-        logger.info(alarm)
+        # logger.info(alarm)
 
         # check event type
         if alarm["event"] != "VMD" and alarm["state"] != "active":  
