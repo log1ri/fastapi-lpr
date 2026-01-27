@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-
+import asyncio
 async def parse_alarm_xml(xml_text: str):
     ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
     root = ET.fromstring(xml_text)
@@ -18,3 +18,10 @@ async def parse_alarm_xml(xml_text: str):
         "h": root.findtext(".//h:height", namespaces=ns),
     }
     return data
+
+def _get_lock(ip: str) -> asyncio.Lock:
+    lock = _ip_locks.get(ip)
+    if lock is None:
+        lock = asyncio.Lock()
+        _ip_locks[ip] = lock
+    return lock

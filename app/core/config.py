@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     
     SESSION_TIMEOUT_MINUTES: int = 15
     JOB_CHECK_SESSION_INTERVAL: int = 1
+    
+    HIK_CAMERA_USER: str
+    HIK_CAMERA_PASSWORD: str
 
     class Config:
         env_file = ".env"
