@@ -41,8 +41,6 @@ class OcrMongoService:
             ocr_model_name = ocr_data.get("ocr_model_name")
             
             
-            # organize = await self.mapCamId(camId)
-            # logger.info("Organization: %s", organization)
             if not organization:
                 raise BusinessLogicError("organization is required")
 
@@ -152,9 +150,7 @@ class OcrMongoService:
                         "entry": {"time": ts, "camId": camId, "logId": log_id},
                         "exit": None,
                         "durationSec": None,
-                        # "lastSeenAt": ts,
                         "createdAt": now,
-                        # "updatedAt": now,
                     },
                 }
 
