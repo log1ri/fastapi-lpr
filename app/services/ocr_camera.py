@@ -1,7 +1,7 @@
-import asyncio, time, logging
-import xml.etree.ElementTree as ET
 import httpx
 import base64
+import asyncio, time, logging
+import xml.etree.ElementTree as ET
 from pyparsing import lru_cache
 from fastapi.concurrency import run_in_threadpool
 from app.core.config import get_settings 
@@ -11,12 +11,14 @@ from app.services.do_space import DOService
 
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
 _last_ms = 0
 _counter = 0
+
 do_service = DOService()
+settings = get_settings()
 mongo_service = OcrMongoService()
 ocr_service_instance = OCRService()
+
 @lru_cache
 def get_ocr_service():
     return ocr_service_instance
@@ -224,7 +226,7 @@ class HikSnapshotService:
                 session = await mongo_service.resolve_session_from_log(db,direction, macAddress)
 
                 
-            case "no_text":
+            case "no_text" | "short_text":
                 # has 2 images but send only croppedPlateImage to issue  pro path
                 if not image_bytes.get("croppedPlateImage"):
                     logger.error("Missing croppedPlateImage for readStatus 'no_text' mac=%s ip=%s", macAddress, ip)
