@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Body, HTTPException, Depends, Request,requests
 from fastapi.concurrency import run_in_threadpool
-####### new
 from fastapi.responses import Response
-from requests.auth import HTTPDigestAuth
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
 from app.services.ocr_mongo_service import OcrMongoService
