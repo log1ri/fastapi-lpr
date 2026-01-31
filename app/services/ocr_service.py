@@ -311,7 +311,21 @@ class OCRService:
             # decode plate text
             result = self.decode_plate_text(sorted_detections)
             logger.info("Decode plate text done.")
-
+            
+            if len(result["regNum"]) < 4:
+                logger.error("[OCR] short_text: Decoded text too short <4 chars")
+                # plate text too short
+                return {
+                    "error": "Decoded text too short",
+                    "regNum": result["regNum"],
+                    "province": result["Province"],
+                    "confidence": result["confidence"],
+                    "readStatus": "short_text",  
+                    "originalImage": None,
+                    "croppedPlateImage": self.img_to_jpeg_bytes(cropped_plate),
+                    "latencyMs": (time.time() - start_time) * 1000
+                }
+            
             # format output images
             original_img = self.img_to_jpeg_bytes(original_frame)
             crop_img = self.img_to_jpeg_bytes(cropped_plate)
