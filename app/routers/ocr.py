@@ -2,11 +2,7 @@ from fastapi import APIRouter, Body, HTTPException, Depends, Request,requests
 from fastapi.concurrency import run_in_threadpool
 ####### new
 from fastapi.responses import Response
-import requests
 from requests.auth import HTTPDigestAuth
-import asyncio
-import httpx
-##########
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
 from app.services.ocr_mongo_service import OcrMongoService
@@ -15,11 +11,9 @@ from app.schemas.ocr import ImgBody
 from app.core.exceptions import BusinessLogicError
 
 from functools import lru_cache
-########### new
 import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
-###########
 import time
 import uuid
 
@@ -53,8 +47,7 @@ def next_id():
     # return f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
 
 
-
-
+# for Hikvision alarm webhook
 @router.post("/hik/alarm")
 async def hik_alarm(request: Request):
 
@@ -86,30 +79,13 @@ async def hik_alarm(request: Request):
         if await svc.should_trigger(ip):
             svc.create_task(svc.snap_and_process(ip, alarm["macAddress"]))
 
-        
     else:
         logger.warning("NO XML FILE, RAW FORM: %s", form)
     return Response(status_code=200)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# api test endpoint
 @router.post("/predict",status_code=201)
 async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
 
@@ -173,7 +149,7 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             session = await mongo_service.resolve_session_from_log(db,direction, payload.camId)
 
             
-        case "no_text":
+        case "no_text" | "short_text":
             # has 2 images but send only croppedPlateImage to issue  pro path
             if not image_bytes.get("croppedPlateImage"):
                 raise BusinessLogicError("Missing croppedPlateImage for readStatus 'no_text'")
@@ -200,7 +176,6 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         case _:
             raise BusinessLogicError(f"Unknown readStatus '{read_status}'")
 
-            
     
     return {
         "ocr-response": ocr_data, 
@@ -210,7 +185,7 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
     }  
     
 
-
+# base64 to image size test endpoint
 @router.post("/base64-to-img",status_code=201)
 async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_service)):
     # OCRService()                               
@@ -219,6 +194,7 @@ async def decoded(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         raise BusinessLogicError("Invalid base64 image")
     return {"response": len(result)}  
 
+# ml check endpoint
 @router.post("/ml-check",status_code=200)
 async def ml_check(imgBase64: str = Body(..., embed=True), ocr_service: OCRService = Depends(get_ocr_service)):
     # call OCR service in thread pool

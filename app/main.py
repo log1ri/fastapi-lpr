@@ -24,11 +24,13 @@ async def lifespan(app: FastAPI):
     # ⭐ Startup
     await init_db()
 
+    # create http client in lifespan
     app.state.http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
     
+    # create HikSnapshotService in lifespan
     app.state.hik_snapshot_service = HikSnapshotService(
         client=app.state.http_client,
         username=settings.HIK_CAMERA_USER,
@@ -81,49 +83,6 @@ async def lifespan(app: FastAPI):
             app.state.http_client = None
 
 
-
-
-
-# scheduler = AsyncIOScheduler(timezone="UTC")
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     # ⭐ Startup
-    
-#     await init_db()
-    
-    
-#     app.state.http_client = httpx.AsyncClient(
-#         timeout=httpx.Timeout(connect=3.0, read=6.0, write=6.0, pool=6.0),
-#         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-#     )
-    
-#     # ✅ Start session cleanup scheduler
-#     scheduler.add_job(
-#         cleanup_sessions_job,
-#         trigger="interval",
-#         minutes=settings.JOB_CHECK_SESSION_INTERVAL,
-#         id="cleanup_sessions",
-#         max_instances=1,      # protect job overlap
-#         coalesce=True,        # if a run is missed, combine into one run
-#         misfire_grace_time=30
-#     )
-    
-#     if not scheduler.running:
-#         scheduler.start()
-        
-#     logger.info("✅ APScheduler started: cleanup_sessions_job every 1 minute")
-
-#     yield  # <– cut line between startup and shutdown
-
-#     # ⭐ Shutdown
-#     try:
-#         scheduler.shutdown(wait=False)
-#     except Exception:
-#         pass
-
-#     if app.state.http_client:
-#         await app.state.http_client.aclose()
-#         app.state.http_client = None
 
 # setup FastAPI app
 app = FastAPI(
