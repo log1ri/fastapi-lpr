@@ -44,6 +44,9 @@ def next_id():
         _counter = 0
     return f"{ms}{_counter:03d}" 
     # return f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}"
+    
+def _ms(t0: float) -> int:
+    return int((time.perf_counter() - t0) * 1000)   
 
 
 # for Hikvision alarm webhook
@@ -91,11 +94,16 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
     url = None
     db = None
     session = None
+    timings: dict[str, int] = {}
+    t_req = time.perf_counter()
+    
     print("\n\n")
     logger.info("OCR Predict Start!!!")
     
     # -------call OCR service in thread pool -------
+    t0 = time.perf_counter()
     result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
+    timings["ocr_ms"] = _ms(t0)
     
     # ------- destructure result -------
     ocr_data = {
@@ -116,14 +124,19 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
     }
     
     # ------- fetch camera data -------
+    t0 = time.perf_counter()
     camerasData = await mongo_service.mapCamId(payload.camId)
+    timings["mongo_mapCamId_ms"] = _ms(t0)
+
     if not camerasData:
         raise BusinessLogicError(f"Camera ID '{payload.camId}' not found")
 
     organization, direction = camerasData
     
     # ------- fetch subId -------
+    t0 = time.perf_counter()
     subId = await mongo_service.get_UID_by_organize(organization)
+    timings["mongo_get_UID_ms"] = _ms(t0)
     
     if not organization or not subId or not direction:
         raise BusinessLogicError(f"Organization for Camera ID '{payload.camId}' not found")
@@ -142,12 +155,13 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         case "complete":
             now = datetime.utcnow()
             
-     
             if not image_bytes.get("originalImage") or not image_bytes.get("croppedPlateImage"):
                 raise BusinessLogicError("Missing images for readStatus 'complete'")
             
+            t0 = time.perf_counter()
             latest = await mongo_service.latest_session(organization, subId, ocr_data["regNum"])
-
+            timings["mongo_latest_session_ms"] = _ms(t0)
+            
             # lock check
             if latest and latest.get("lockedUntil") and now < latest["lockedUntil"]:
                 # LOCKED -> ignore
@@ -163,7 +177,10 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             
             # out duration check
             if direction == 'OUT':
+                t0 = time.perf_counter()
                 open_doc = await mongo_service.open_session(organization, subId, ocr_data["regNum"])
+                timings["mongo_open_session_ms"] = _ms(t0)
+
 
                 if open_doc:
                     entry_time = (open_doc.get("entry") or {}).get("time")
@@ -178,25 +195,37 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
                             "reason": "MIN_DURATION",
                         }
             
-            
+            # upload images
+            t0 = time.perf_counter()
             url = await do_service.upload_two_images(
                 image_bytes.get("originalImage"), 
                 image_bytes.get("croppedPlateImage"), 
                 orig_path, 
                 crop_path)
+            timings["upload_ms"] = _ms(t0)
+            
+            # insert log 
+            t0 = time.perf_counter()
             db = await mongo_service.log_ocr(ocr_data, organization,url, subId)
+            timings["log_ms"] = _ms(t0)
+            
+            # insert session
+            t0 = time.perf_counter()
             session = await mongo_service.resolve_session_from_log(db,direction, payload.camId)
-
+            timings["session_ms"] = _ms(t0)
             
         case "no_text" | "short_text":
             # has 2 images but send only croppedPlateImage to issue  pro path
             if not image_bytes.get("croppedPlateImage"):
                 raise BusinessLogicError("Missing croppedPlateImage for readStatus 'no_text'")
             
+            t0 = time.perf_counter()
             url = await do_service.upload_image(
                 image_bytes.get("croppedPlateImage"), 
                 issue_pro_path, 
                 content_type="image/jpeg")
+            timings["upload_ms"] = _ms(t0)
+            
             db = None
             session = None
 
@@ -205,22 +234,29 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
             if not image_bytes.get("originalImage"):
                 raise BusinessLogicError("Missing originalImage for readStatus 'no_plate'")
             
+            t0 = time.perf_counter()
             url = await do_service.upload_image(
                 image_bytes.get("originalImage"), 
                 issue_pro_path, 
                 content_type="image/jpeg")
+            timings["upload_ms"] = _ms(t0)
+            
             db = None
             session = None
 
         case _:
             raise BusinessLogicError(f"Unknown readStatus '{read_status}'")
+    
+    timings["total_ms"] = _ms(t_req)
+    logger.info("timings=%s", timings)
 
     
     return {
         "ocr-response": ocr_data, 
         "do-service": url,
         "log": db,
-        "session": session.model_dump(by_alias=True) if session else None
+        "session": session.model_dump(by_alias=True) if session else None,
+        "timings": timings,
     }  
     
 
