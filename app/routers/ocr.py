@@ -1,18 +1,19 @@
 from fastapi import APIRouter, Body, HTTPException, Depends, Request,requests
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
+from datetime import datetime
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
 from app.services.ocr_mongo_service import OcrMongoService
 from app.services.do_space import DOService
 from app.schemas.ocr import ImgBody 
 from app.core.exceptions import BusinessLogicError
-
 from functools import lru_cache
+import time
+
 import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
-import time
 import uuid
 
 settings = get_settings()
@@ -90,11 +91,13 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
     url = None
     db = None
     session = None
-
-    # call OCR service in thread pool
+    print("\n\n")
+    logger.info("OCR Predict Start!!!")
+    
+    # -------call OCR service in thread pool -------
     result =  await run_in_threadpool(ocr_service.predict, payload.imgBase64)
     
-    # destructure result
+    # ------- destructure result -------
     ocr_data = {
         "regNum": result.get("regNum"),
         "province": result.get("province"),
@@ -112,31 +115,69 @@ async def predict(payload: ImgBody, ocr_service: OCRService = Depends(get_ocr_se
         "croppedPlateImage": result.get("croppedPlateImage"),
     }
     
-    # fetch organization and subId
+    # ------- fetch camera data -------
     camerasData = await mongo_service.mapCamId(payload.camId)
     if not camerasData:
         raise BusinessLogicError(f"Camera ID '{payload.camId}' not found")
 
     organization, direction = camerasData
+    
+    # ------- fetch subId -------
     subId = await mongo_service.get_UID_by_organize(organization)
     
     if not organization or not subId or not direction:
         raise BusinessLogicError(f"Organization for Camera ID '{payload.camId}' not found")
     
-    # prepare DO image paths
+    # ------- prepare DO image paths -------
     ts = next_id()
 
+    # create do paths
     orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
     crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{ts}.jpg".replace("subId", subId)
     issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
     
-        
+    # ------- process according to readStatus -------
     read_status = result.get("readStatus")
     match read_status:
         case "complete":
-            # send 2 image and creat log
+            now = datetime.utcnow()
+            
+     
             if not image_bytes.get("originalImage") or not image_bytes.get("croppedPlateImage"):
                 raise BusinessLogicError("Missing images for readStatus 'complete'")
+            
+            latest = await mongo_service.latest_session(organization, subId, ocr_data["regNum"])
+
+            # lock check
+            if latest and latest.get("lockedUntil") and now < latest["lockedUntil"]:
+                # LOCKED -> ignore
+                logger.info("IGNORE %s org=%s reg=%s", "LOCKED", organization, ocr_data["regNum"])
+                return {
+                        "ocr-response": ocr_data,
+                        "do-service": None,
+                        "log": None,
+                        "session": None,
+                        "ignored": True,
+                        "reason": "LOCKED",
+                }
+            
+            # out duration check
+            if direction == 'OUT':
+                open_doc = await mongo_service.open_session(organization, subId, ocr_data["regNum"])
+
+                if open_doc:
+                    entry_time = (open_doc.get("entry") or {}).get("time")
+                    if entry_time and (now - entry_time).total_seconds() < settings.MIN_DURATION_SEC:
+                        logger.info("IGNORE %s org=%s reg=%s", "MIN_DURATION", organization, ocr_data["regNum"])
+                        return {
+                            "ocr-response": ocr_data,
+                            "do-service": None,
+                            "log": None,
+                            "session": None,
+                            "ignored": True,
+                            "reason": "MIN_DURATION",
+                        }
+            
             
             url = await do_service.upload_two_images(
                 image_bytes.get("originalImage"), 
