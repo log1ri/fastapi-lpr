@@ -18,8 +18,6 @@ class VehicleSession(Document):
     reg_num: str
     province: Optional[str] = None
 
-    # plateNormalized: str
-
     status: SessionStatus = "OPEN"
 
     entry: Optional[SessionPoint]
@@ -31,12 +29,16 @@ class VehicleSession(Document):
 
     createdAt: datetime = Field(default_factory=datetime.utcnow)
     updatedAt: datetime = Field(default_factory=datetime.utcnow)
+    lockedUntil: Optional[datetime] = None
 
     class Settings:
         name = "vehicle_sessions"
         indexes = [
             # list session
             [("organization", 1), ("subId", 1), ("status", 1), ("entry.time", -1)],
+            
+            # find lastest_session
+            [("organization", 1), ("subId", 1), ("reg_num", 1)],
 
             # find open session 
             IndexModel(
