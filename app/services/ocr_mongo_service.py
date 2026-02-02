@@ -5,10 +5,13 @@ from app.models.vehicle_session import VehicleSession, SessionPoint
 from app.core.exceptions import MongoLogError, BusinessLogicError
 from app.services.ocr_labelMapping import province_to_iso
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from pymongo import ReturnDocument
+from app.core.config import get_settings 
 import logging
+
 logger = logging.getLogger("MONGO_service")
+settings = get_settings()
 
 class OcrMongoService:
     
@@ -26,6 +29,51 @@ class OcrMongoService:
         if not user:
             return None
         return str(user.id)
+    
+    async def latest_session(self, org:str, subId:str, regNum:str):
+        
+        col = VehicleSession.get_pymongo_collection()
+        # find latest session by org, subId, regNum (projection only needed fields)
+        doc = await col.find_one(
+            {"organization": org, "subId": subId, "reg_num": regNum},
+            projection={
+                "_id": 1,
+                "status": 1,
+                "lockedUntil": 1,
+                "updatedAt": 1,
+                "createdAt": 1,
+            },
+            sort=[("updatedAt", -1), ("createdAt", -1)],
+        )
+        return doc
+    
+    async def open_session(self, org: str, subId: str, regNum: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Find the current OPEN session for (org, subId, reg_num).
+        Used for OUT minDuration check (entry.time).
+        Returns raw Mongo doc (dict) or None.
+        """
+
+        #find without beanie model
+        col = VehicleSession.get_pymongo_collection()
+
+        doc = await col.find_one(
+            {
+                "organization": org,
+                "subId": subId,
+                "reg_num": regNum,
+                "status": "OPEN",
+            },
+            projection={
+                "_id": 1,
+                "entry.time": 1,   # ✅ only what we need for minDuration
+                "entry.camId": 1,  # optional
+                "lastSeenAt": 1,   # optional (debug)
+                "updatedAt": 1,    # optional (debug)
+            },
+        )
+        return doc
 
     
     async def log_ocr(self, ocr_data: Dict[str, Any], organization: str, image_url: List[str], uId: str) -> Dict[str, Any]:
@@ -173,7 +221,7 @@ class OcrMongoService:
                     "status": "OPEN",
                 }
 
-                # 1) close open-session(atomic): ถ้ามีคนอื่นปิดไปแล้ว จะไม่ match และ doc จะเป็น None
+                # 1) close open-session(atomic): if close it will not match and doc = None
                 doc = await col.find_one_and_update(
                     q,
                     {
@@ -197,7 +245,17 @@ class OcrMongoService:
                     else:
                         duration = None
 
-                    await col.update_one({"_id": doc["_id"]}, {"$set": {"durationSec": duration}})
+                    locked_until = now + timedelta(seconds=settings.T_CLOSE_SEC)
+
+                    await col.update_one(
+                        {"_id": doc["_id"]}, 
+                        {
+                            "$set": {
+                            "durationSec": duration,
+                            "lockedUntil": locked_until
+                            }
+                        }
+                    )
                     logger.info("Closed OUT session with ID: %s, durationSec: %s", str(doc["_id"]), str(duration))
                     
                     doc["durationSec"] = duration
@@ -216,6 +274,8 @@ class OcrMongoService:
                     lastSeenAt=ts,
                     createdAt=now,
                     updatedAt=now,
+                    lockedUntil=now + timedelta(seconds=settings.T_CONFLICT_SEC),
+
                 )
                 await conflict.insert()
                 logger.info("Created CONFLICT session with ID: %s", str(conflict.id))
@@ -226,101 +286,3 @@ class OcrMongoService:
             logger.exception("Mongo operation failed in resolve_session_from_log")
             raise MongoLogError(f"Mongo operation failed: {e}") from e
         return None
-        
-    # async def resolve_session_from_log(self, log, direction: str, camId: str):
-    #     try:
-    #         pass
-    #         if direction not in ("IN", "OUT"):
-    #             raise BusinessLogicError(f"Invalid camera direction: {direction}")
-            
-    #         open_session = await VehicleSession.find(
-    #             VehicleSession.organization == log.get("organization"),
-    #             VehicleSession.subId == log.get("subId"),
-    #             VehicleSession.reg_num == log.get("regNum"),
-    #             VehicleSession.status == "OPEN",
-    #         ).sort(-VehicleSession.entry.time).first_or_none()
-            
-    #         now = datetime.utcnow()
-            
-    #         if direction == "IN":
-    #             if open_session is None:
-    #                 sess = VehicleSession(
-    #                     organization=log.get("organization"),
-    #                     subId=log.get("subId"),
-    #                     reg_num=log.get("regNum"),
-    #                     province=log.get("province"),
-    #                     status="OPEN",
-    #                     entry=SessionPoint(
-    #                         time=log.get("timestamp"), 
-    #                         camId=camId, 
-    #                         logId=log.get("logId")
-    #                     ),
-    #                     exit=None,
-    #                     durationSec=None,
-    #                     lastSeenAt=log.get("timestamp"),
-    #                     createdAt=now,
-    #                     updatedAt=now,
-    #                 )
-    #                 await sess.insert()
-    #                 return sess
-    #             else:
-    #                 # มี OPEN อยู่แล้ว -> ถือว่าเป็นการเจอซ้ำ (รถยังอยู่)
-    #                 open_session.lastSeenAt = log.get("timestamp")
-    #                 open_session.updatedAt = now
-    #                 await open_session.save()
-    #                 return open_session
-            
-            
-    #         # 4) กรณี OUT: ปิด session ถ้ามี OPEN / ถ้าไม่มีให้สร้าง CONFLICT
-    #         if direction == "OUT":
-    #             if open_session is not None:
-    #                 open_session.exit = SessionPoint(
-    #                     time=log.get("timestamp"), 
-    #                     camId=camId, 
-    #                     logId=log.get("logId")
-    #                 )
-    #                 open_session.status = "CLOSED"
-
-    #                 # duration
-    #                 if open_session.entry and open_session.entry.time and open_session.exit and open_session.exit.time:
-    #                     duration = (open_session.exit.time - open_session.entry.time).total_seconds()
-    #                     open_session.durationSec = max(0, int(duration))
-    #                 else:
-    #                     open_session.durationSec = None
-                    
-                    
-                    
-    #                 # duration = (open_session.exit.time - open_session.entry.time).total_seconds()
-    #                 # open_session.durationSec = max(0, int(duration))
-
-    #                 open_session.lastSeenAt = log.get("timestamp")
-    #                 open_session.updatedAt = now
-    #                 await open_session.save()
-    #                 return open_session
-    #             else:
-    #                 # OUT โดยไม่มี OPEN -> conflict session
-    #                 sess = VehicleSession(
-    #                     organization=log.get("organization"),
-    #                     subId=log.get("subId"),
-    #                     reg_num=log.get("regNum"),
-    #                     province=log.get("province"),
-    #                     status="CONFLICT",
-    #                     entry=None,
-    #                     exit=SessionPoint(time=log.get("timestamp"), camId=camId, logId=log.get("logId")),
-    #                     durationSec=None,
-    #                     lastSeenAt=log.get("timestamp"),
-    #                     createdAt=now,
-    #                     updatedAt=now,
-    #                 )
-    #                 await sess.insert()
-    #                 return sess
-
-    #         return None
-    #     except Exception as e:
-    #         logger.exception("Resolve session failed")
-    #         raise BusinessLogicError(f"Resolve session failed: {e}") from e    
-
-
-    
-        
-
