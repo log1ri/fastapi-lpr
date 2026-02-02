@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     DO_SPACES_ENDPOINT: str
     DO_SPACES_BUCKET: str
     DO_SPACES_CDN_DOMAIN: str | None = None
-    # IMG_LOG_PATH_PREFIX: str
     ORI_IMG_LOG_PATH_PREFIX: str
     PRO_IMG_LOG_PATH_PREFIX: str
 
@@ -49,7 +48,6 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
 
-# settings = Settings()
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
