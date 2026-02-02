@@ -1,8 +1,9 @@
 import httpx
 import base64
 import asyncio, time, logging
+from datetime import datetime
 import xml.etree.ElementTree as ET
-from pyparsing import lru_cache
+from functools import lru_cache
 from fastapi.concurrency import run_in_threadpool
 from app.core.config import get_settings 
 from app.services.ocr_service import OCRService
@@ -56,6 +57,10 @@ class HikSnapshotService:
             lock = asyncio.Lock()
             self._ip_locks[ip] = lock
         return lock
+    
+    def _ms(self, t0: float) -> int:
+        return int((time.perf_counter() - t0) * 1000)   
+    
     
     def next_id(self):
         global _last_ms, _counter
@@ -135,7 +140,6 @@ class HikSnapshotService:
 
         return None
     
-
     async def parse_alarm_xml(self, xml_text: str):
         ns = {"h": "http://www.hikvision.com/ver20/XMLSchema"}
         root = ET.fromstring(xml_text)
@@ -157,9 +161,17 @@ class HikSnapshotService:
         url = None
         db = None
         session = None
+        timings: dict[str, int] = {}
+        t_req = time.perf_counter()
+        
+        print("\n\n")
+        logger.info("Process Start!!!")
         
         # fetch snapshot
+        t0 = time.perf_counter()
         img = await self.fetch_snapshot(ip)
+        timings["fetch_ms"] = self._ms(t0)
+        
         if not img:
             logger.error("No snapshot image fetched ip=%s", ip)
             return
@@ -167,10 +179,12 @@ class HikSnapshotService:
         # img encode base64
         img_b64 = base64.b64encode(img).decode("utf-8")
         
-        # run ocr in threadpool
+        # -------call OCR service in thread pool -------
+        t0 = time.perf_counter()
         result =  await run_in_threadpool(ocr_service_instance.predict, img_b64)
-
-        # destructure result
+        timings["ocr_ms"] = self._ms(t0)
+        
+        # ------- destructure result -------
         ocr_data = {
             "regNum": result.get("regNum"),
             "province": result.get("province"),
@@ -188,42 +202,91 @@ class HikSnapshotService:
             "croppedPlateImage": result.get("croppedPlateImage"),
         }
         
-        # fetch organization and subId
+        # ------- fetch camera data -------
+        t0 = time.perf_counter()
         camerasData = await mongo_service.mapCamId(macAddress)
+        timings["mongo_mapCamId_ms"] = self._ms(t0)
+
         if not camerasData:
             logger.warning("Camera not found mac=%s ip=%s", macAddress, ip)
             return
 
         organization, direction = camerasData
+        
+        # ------- fetch subId -------
+        t0 = time.perf_counter()
         subId = await mongo_service.get_UID_by_organize(organization)
-
+        timings["mongo_get_UID_ms"] = self._ms(t0)
+        
         if not organization or not subId or not direction:
             logger.warning("Organization/SubId/Direction not found mac=%s ip=%s", macAddress, ip)
             return        
         
-        # prepare DO image paths
+        # ------- prepare DO image paths -------
         ts = self.next_id()
-
+        
+        # create do paths
         orig_path = f"{settings.ORI_IMG_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
         crop_path = f"{settings.PRO_IMG_LOG_PATH_PREFIX}/cropped_{ts}.jpg".replace("subId", subId)
         issue_pro_path = f"{settings.ISSUE_LOG_PATH_PREFIX}/{ts}.jpg".replace("subId", subId)
 
-        
+        # ------- process according to readStatus -------
         read_status = result.get("readStatus")
         match read_status:
             case "complete":
+                
+                now = datetime.utcnow()
+
                 # send 2 image and creat log
                 if not image_bytes.get("originalImage") or not image_bytes.get("croppedPlateImage"):
                     logger.error("Missing images for readStatus 'complete' mac=%s ip=%s", macAddress, ip)
                     return
                 
+                # lock fetch
+                t0 = time.perf_counter()
+                latest = await mongo_service.latest_session(organization, subId, ocr_data["regNum"])
+                timings["mongo_latest_session_ms"] = self._ms(t0)
+                
+                # lock check
+                if latest and latest.get("lockedUntil") and now < latest["lockedUntil"]:
+                    # LOCKED -> ignore
+                    logger.info("IGNORE %s org=%s reg=%s", "LOCKED", organization, ocr_data["regNum"])
+                    return 
+            
+                # out duration check
+                if direction == 'OUT':
+                    t0 = time.perf_counter()
+                    open_doc = await mongo_service.open_session(organization, subId, ocr_data["regNum"])
+                    timings["mongo_open_session_ms"] = self._ms(t0)
+
+
+                    if open_doc:
+                        
+                        entry_time = (open_doc.get("entry") or {}).get("time")
+                        
+                        if entry_time and (now - entry_time).total_seconds() < settings.MIN_DURATION_SEC:
+                            logger.info("IGNORE %s org=%s reg=%s", "MIN_DURATION", organization, ocr_data["regNum"])
+                            return 
+            
+                
+                # upload images
+                t0 = time.perf_counter()
                 url = await do_service.upload_two_images(
                     image_bytes.get("originalImage"), 
                     image_bytes.get("croppedPlateImage"), 
                     orig_path, 
                     crop_path)
+                timings["upload_ms"] = self._ms(t0)
+                
+                # insert log 
+                t0 = time.perf_counter()
                 db = await mongo_service.log_ocr(ocr_data, organization,url, subId)
+                timings["log_ms"] = self._ms(t0)
+                
+                # insert session
+                t0 = time.perf_counter()
                 session = await mongo_service.resolve_session_from_log(db,direction, macAddress)
+                timings["session_ms"] = self._ms(t0)
 
                 
             case "no_text" | "short_text":
@@ -232,10 +295,13 @@ class HikSnapshotService:
                     logger.error("Missing croppedPlateImage for readStatus 'no_text' mac=%s ip=%s", macAddress, ip)
                     return
                 
+                t0 = time.perf_counter()
                 url = await do_service.upload_image(
                     image_bytes.get("croppedPlateImage"), 
                     issue_pro_path, 
                     content_type="image/jpeg")
+                timings["upload_ms"] = self._ms(t0)
+                
                 db = None
                 session = None
 
@@ -245,22 +311,29 @@ class HikSnapshotService:
                     logger.error("Missing originalImage for readStatus 'no_plate' mac=%s ip=%s", macAddress, ip)
                     return
                 
+                t0 = time.perf_counter()
                 url = await do_service.upload_image(
                     image_bytes.get("originalImage"), 
                     issue_pro_path, 
                     content_type="image/jpeg")
+                timings["upload_ms"] = self._ms(t0)
+                
                 db = None
                 session = None
 
             case _:
                 logger.error("Unknown readStatus '%s' mac=%s ip=%s", read_status, macAddress, ip)
                 return  
+            
+        timings["total_ms"] = self._ms(t_req)
+        logger.info("timings=%s", timings)
 
         logger.info(
-            "PIPELINE DONE ip=%s plate=%s status=%s",
+            "PIPELINE DONE ip=%s plate=%s status=%s timings=%s",
             ip,
             ocr_data.get("regNum"),
             ocr_data.get("readStatus"),
+            timings
         )
     
         
