@@ -219,7 +219,6 @@ class OCRService:
         try:
             # 1 decode base64 image =======================================
             decoded = self.decode_base64(img_base64)
-            print("\n\n")
             logger.info("Base64 decoding done.")
             
             if decoded is None:
@@ -329,6 +328,7 @@ class OCRService:
             # format output images
             original_img = self.img_to_jpeg_bytes(original_frame)
             crop_img = self.img_to_jpeg_bytes(cropped_plate)
+            logger.info("Ocr Latency: %.2f ms", (time.time() - start_time) * 1000)
             
             return {
                 "error": None,
