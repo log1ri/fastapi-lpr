@@ -17,35 +17,44 @@ class OcrMongoService:
     
     #1
     async def mapCamId(self, camid: str) -> Optional[tuple[str, str]]:
-
-        data = await cameras.find_one(cameras.camId == camid)
-        if not data or not data.organization or not data.direction: 
-            return None
-        return (data.organization, data.direction)
+        try:
+            data = await cameras.find_one(cameras.camId == camid)
+            if not data or not data.organization or not data.direction: 
+                return None
+            return (data.organization, data.direction)
+        except Exception as e:
+            logger.exception("mapCamId query failed")
+            raise MongoLogError(f"mapCamId query failed: {e}") from e
     #2
     async def get_UID_by_organize(self, organize: Optional[str]) -> Optional[str]:
-
-        user = await User.find_one(User.organization == organize).project(UserPublic)
-        if not user:
-            return None
-        return str(user.id)
+        try:
+            user = await User.find_one(User.organization == organize).project(UserPublic)
+            if not user:
+                return None
+            return str(user.id)
+        except Exception as e:
+            logger.exception("get_UID_by_organize query failed")
+            raise MongoLogError(f"get_UID_by_organize query failed: {e}") from e
     
     async def latest_session(self, org:str, subId:str, regNum:str):
-        
-        col = VehicleSession.get_pymongo_collection()
-        # find latest session by org, subId, regNum (projection only needed fields)
-        doc = await col.find_one(
-            {"organization": org, "subId": subId, "reg_num": regNum},
-            projection={
-                "_id": 1,
-                "status": 1,
-                "lockedUntil": 1,
-                "updatedAt": 1,
-                "createdAt": 1,
-            },
-            sort=[("updatedAt", -1), ("createdAt", -1)],
-        )
-        return doc
+        try:
+            col = VehicleSession.get_pymongo_collection()
+            # find latest session by org, subId, regNum (projection only needed fields)
+            doc = await col.find_one(
+                {"organization": org, "subId": subId, "reg_num": regNum},
+                projection={
+                    "_id": 1,
+                    "status": 1,
+                    "lockedUntil": 1,
+                    "updatedAt": 1,
+                    "createdAt": 1,
+                },
+                sort=[("updatedAt", -1), ("createdAt", -1)],
+            )
+            return doc
+        except Exception as e:
+            logger.exception("latest_session query failed")
+            raise MongoLogError(f"latest_session query failed: {e}") from e
     
     async def open_session(self, org: str, subId: str, regNum: str,
     ) -> Optional[Dict[str, Any]]:
@@ -54,26 +63,29 @@ class OcrMongoService:
         Used for OUT minDuration check (entry.time).
         Returns raw Mongo doc (dict) or None.
         """
-
+        try:
         #find without beanie model
-        col = VehicleSession.get_pymongo_collection()
+            col = VehicleSession.get_pymongo_collection()
 
-        doc = await col.find_one(
-            {
-                "organization": org,
-                "subId": subId,
-                "reg_num": regNum,
-                "status": "OPEN",
-            },
-            projection={
-                "_id": 1,
-                "entry.time": 1,   # ✅ only what we need for minDuration
-                "entry.camId": 1,  # optional
-                "lastSeenAt": 1,   # optional (debug)
-                "updatedAt": 1,    # optional (debug)
-            },
-        )
-        return doc
+            doc = await col.find_one(
+                {
+                    "organization": org,
+                    "subId": subId,
+                    "reg_num": regNum,
+                    "status": "OPEN",
+                },
+                projection={
+                    "_id": 1,
+                    "entry.time": 1,   # ✅ only what we need for minDuration
+                    "entry.camId": 1,  # optional
+                    "lastSeenAt": 1,   # optional (debug)
+                    "updatedAt": 1,    # optional (debug)
+                },
+            )
+            return doc
+        except Exception as e:
+            logger.exception("open_session query failed")
+            raise MongoLogError(f"open_session query failed: {e}") from e
 
     
     async def log_ocr(self, ocr_data: Dict[str, Any], organization: str, image_url: List[str], uId: str) -> Dict[str, Any]:
