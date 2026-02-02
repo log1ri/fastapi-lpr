@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     
     HIK_CAMERA_USER: str
     HIK_CAMERA_PASSWORD: str
+    MIN_DURATION_SEC: int = 60
+    T_CONFLICT_SEC: int = 60
+    T_CLOSE_SEC: int = 60
 
     class Config:
         env_file = ".env"
