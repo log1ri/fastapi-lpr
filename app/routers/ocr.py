@@ -70,7 +70,7 @@ async def hik_alarm(request: Request):
         # logger.info(alarm)
 
         # check event type
-        if alarm["event"] != "VMD" and alarm["state"] != "active":  
+        if alarm["event"] != "VMD" and alarm["state"] != "active" and alarm["target"] != "vehicle":  
             return Response(status_code=200)
         
         # check Ip

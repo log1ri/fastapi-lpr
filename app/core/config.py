@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     MIN_DURATION_SEC: int = 60
     T_CONFLICT_SEC: int = 60
     T_CLOSE_SEC: int = 60
+    cooldown_sec: int = 3
+    alarm_cooldown_sec: int = 3
 
     class Config:
         env_file = ".env"
