@@ -65,8 +65,9 @@ class OCRService:
         if frame is None:
             return None
         
-        resized = self.resize_image(frame, target_size=(640, 640))
-        return frame, resized
+        # resized = self.resize_image(frame, target_size=(640, 640))
+        # return frame, resized
+        return frame
     
     # 3
     def detect_plate(self, img: np.ndarray):
@@ -235,15 +236,15 @@ class OCRService:
             if pre is None:
                 logger.warning("[OCR] invalid_image: cv2.imdecode failed (unsupported format?)")
                 raise BusinessLogicError("Unsupported/invalid image format (please send JPEG/PNG)")
-            original_frame, resized_decoded = pre
+            original_frame = pre
             
             # debug img
-            # cv2.imwrite("debug_preprocessed.jpg", resized_decoded)
+            # cv2.imwrite("debug_preprocessed.jpg", original_frame)
             # ===========================================================
 
 
             # detect plate ==============================================
-            plate_boxes = self.detect_plate(resized_decoded)
+            plate_boxes = self.detect_plate(original_frame)
             
             logger.info("Plate detection done.")
             if plate_boxes is None:
@@ -265,7 +266,7 @@ class OCRService:
             
             # ************************************************
             # 3. crop plate image and resize ============================
-            crop_res = self.crop_plate(resized_decoded, plate_boxes)
+            crop_res = self.crop_plate(original_frame, plate_boxes)
             if crop_res is None:
                 logger.error("[OCR] crop_plate failed")
                 return {
@@ -280,6 +281,8 @@ class OCRService:
                 }
             cropped_plate, resized_cropped_plate = crop_res
             
+            
+            # ocr model ============================
             boxes = self.run_ocr_model(resized_cropped_plate)
             logger.info("Char detection done.")
 
