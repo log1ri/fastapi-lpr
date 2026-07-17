@@ -53,9 +53,8 @@ class DOService:
                     Key=image_path,
                     Body=image,
                     ContentType=content_type,
-                    ACL="public-read"
                 )
-            return f"https://{self.bucket}.sgp1.digitaloceanspaces.com/{image_path}"
+            return image_path
 
         except BusinessLogicError:
             raise
